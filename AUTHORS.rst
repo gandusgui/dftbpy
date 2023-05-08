@@ -2,4 +2,4 @@
 Contributors
 ============
 
-* ggandus <ggandus@student.ethz.ch>
+* ggandus <gandusgui@gmail.com>
