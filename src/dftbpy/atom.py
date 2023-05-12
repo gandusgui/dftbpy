@@ -1,6 +1,7 @@
 from math import log, pi, sqrt
 
 import numpy as np
+from ase.data import chemical_symbols
 
 from dftbpy.configs import configurations
 from dftbpy.hartree import hartree
@@ -28,12 +29,13 @@ class Grid:
 class Atom:
     def __init__(self, symbol, gpernode=150) -> None:
         self.symbol = symbol
-        self.Z, self.nlfe_j = configurations[symbol]
+        self.Z, nlfe_j = configurations[symbol]
 
-        self.n_j = [n for n, l, f, e in self.nlfe_j]
-        self.l_j = [l for n, l, f, e in self.nlfe_j]
-        self.f_j = [f for n, l, f, e in self.nlfe_j]
-        self.e_j = [e for n, l, f, e in self.nlfe_j]
+        self.n_j = [n for n, l, f, e in nlfe_j]
+        self.l_j = [l for n, l, f, e in nlfe_j]
+        self.f_j = [f for n, l, f, e in nlfe_j]
+        self.e_j = [e for n, l, f, e in nlfe_j]
+        self.nel = self.Z
 
         # xc
         self.xc = LDA()
@@ -49,6 +51,36 @@ class Atom:
         self.u_j = np.zeros((self.nj, self.N))  # radial wave functions
         self.vr = np.zeros(self.N)  # potential times radius
         self.n = np.zeros(self.N)  # electron density
+
+    @property
+    def nlfe_j(self):
+        yield from zip(self.n_j, self.l_j, self.f_j, self.e_j)
+
+    def add(self, n, l, df=+1, e=None):
+        """Add (df=+1) or remove (df=-1) electron."""
+        self.nel += df
+        j = 0
+        for n_, l_, f_, e_ in self.nlfe_j:
+            if n_ == n and l_ == l:
+                break
+            j += 1
+        if j < len(self.n_j):
+            self.f_j[j] = self.f_j[j] + df
+            if e is not None:
+                self.e_j[j] = e
+            else:
+                # read e_ from neighbor symbol.
+                neighbor = chemical_symbols[self.nel]
+                for n_, l_, f_, e_ in configurations[neighbor][1]:
+                    if n_ == n and l_ == l:
+                        self.e_j[j] = e_
+                        break
+            return
+        self.n_j.append(n)
+        self.l_j.append(l)
+        self.f_j.append(df)
+        if e is None:
+            self.e_j.append(-1.0 * self.Z**2 / n**2)
 
     def guess_radials(self):
         r = self.rgd.r_g
