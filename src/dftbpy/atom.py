@@ -1,10 +1,12 @@
+from collections import namedtuple
 from math import log, pi, sqrt
 
 import numpy as np
 from ase.data import chemical_symbols
 
-from dftbpy.configs import configurations
+from dftbpy.configs import configurations, valence_states
 from dftbpy.hartree import hartree
+from dftbpy.spline import Spline
 from dftbpy.xcf import LDA
 
 
@@ -160,16 +162,17 @@ class Atom:
         mix = 0.4
 
         vrold = None
+        vHr = np.zeros(self.N)
 
         while True:
             # harten potential
-            hartree(0, n * r * dr, r, vr)
+            hartree(0, n * r * dr, r, vHr)
             # nuclear potential
-            vr -= self.Z
+            vHr -= self.Z
             # exchange-correlation potential
             # print(n.shape, vr.shape, r.shape, self.xc.vxc.shape)
             self.xc.compute(n)
-            vr += self.xc.vxc * r
+            vr[:] = vHr + self.xc.vxc * r
             # confinement
             # TODO: implement confinement
             # mix
@@ -188,11 +191,49 @@ class Atom:
             if niter > nitermax:
                 raise RuntimeError("Maximum number of iterations exceeded!")
 
-    def get_potential_energy(self):
+        # Energy contributions
+        Ekin = 0.0
+        for f, e in zip(self.f_j, self.e_j):
+            Ekin += f * e
+
+        self.Ecoul = 2 * pi * np.dot(n * r * (vHr + self.Z), dr)
+        self.Ekin = Ekin - 4 * pi * np.dot(n * vr * r, dr)
+        self.Exc = self.rgd.integrate(self.xc.exc)
+        self.Enucl = -4 * pi * np.dot(n * r * self.Z, dr)
+        self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
+
+    def get_total_energy(self):
         return sum(self.e_j)
 
     def get_number_of_electrons(self):
         return self.rgd.integrate(self.n)
+
+
+class States:
+    State = namedtuple("state", ["e", "f", "R", "ravg"])
+
+    def __init__(self, atom: Atom) -> None:
+        self.atom = atom
+        valence = valence_states[atom.symbol]
+
+        states = {}
+        r = atom.rgd.r_g
+        R = np.empty_like(r)
+        for j, (n, l) in enumerate(zip(atom.n_j, atom.l_j)):
+            if (n, l) in valence:
+                ravg = atom.rgd.integrate(atom.u_j[j], 1)
+                R[1:] = atom.u_j[j][1:] / r[1:]
+                R[0] = R[1]
+                states[n, l] = States.State(
+                    atom.e_j[j], atom.f_j[j], Spline(r, R.copy()), ravg
+                )
+        self.states = states
+
+    def __getitem__(self, key):
+        return self.states[key]
+
+    def get_quantum_numbers(self):
+        return self.states.keys()
 
 
 def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):

@@ -10,8 +10,8 @@ class Spline:
 
     def __call__(self, x, der=0):
         y = splev(x, self.spl, der=der)
-        np.where(x < self.a, 0.0, y, out=y)
-        np.where(x > self.b, 0.0, y, out=y)
+        y = np.where(x < self.a, 0.0, y)
+        y = np.where(x > self.b, 0.0, y)
         return y
 
     def intergrate(self):

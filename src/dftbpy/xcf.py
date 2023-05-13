@@ -1,4 +1,5 @@
 import numpy as np
+from ase.units import Hartree
 from pylibxc import LibXCFunctional
 
 # https://tddft.org/programs/libxc/functionals/
@@ -19,7 +20,8 @@ class LDA:
 
     @property
     def exc(self):
-        return np.squeeze(self.out["exc"])
+        # Units: Hartree
+        return np.squeeze(self.out["exc"]) / Hartree
 
     @property
     def vxc(self):
