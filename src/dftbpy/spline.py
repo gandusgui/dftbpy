@@ -16,3 +16,9 @@ class Spline:
 
     def intergrate(self):
         return splint(self.a, self.b, self.spl)
+
+    def derivative(self, x):
+        return self(x, der=1)
+
+    def laplace(self, x):
+        return self(x, der=2)

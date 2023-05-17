@@ -1,4 +1,3 @@
-from collections import namedtuple
 from math import log, pi, sqrt
 
 import numpy as np
@@ -16,9 +15,18 @@ class Grid:
     def __init__(self, a, b, N) -> None:
         self.a = a
         self.b = b
+        self.N = N
         self.g = np.arange(N)
         self.r_g = self.a * self.g / (1 - self.b * self.g)  # radial grid
         self.dr_g = (self.b * self.r_g + self.a) ** 2 / self.a  # dr/dg
+
+    def empty(self):
+        return np.empty(self.N)
+
+    def zeros(self):
+        a = self.empty()
+        a[:] = 0.0
+        return a
 
     def integrate(self, a_xg, n=0):
         assert n >= -2
@@ -26,6 +34,42 @@ class Grid:
 
     def d2gdr2(self):
         return -2 * self.a * self.b / (self.b * self.r_g + self.a) ** 3
+
+    def derivative(self, n_g, dndr_g=None):
+        """Finite-difference derivative of radial function."""
+        if dndr_g is None:
+            dndr_g = self.empty()
+        dndr_g[0] = n_g[1] - n_g[0]
+        dndr_g[1:-1] = 0.5 * (n_g[2:] - n_g[:-2])
+        dndr_g[-1] = n_g[-1] - n_g[-2]
+        dndr_g /= self.dr_g
+        return dndr_g
+
+    def poisson(self, n_g, l=0):
+        vr_g = self.zeros()
+        nrdr_g = n_g * self.r_g * self.dr_g
+        hartree(l, nrdr_g, self.r_g, vr_g)
+        return vr_g
+
+    def laplace(self, n_g, d2ndr2_g=None):
+        """Laplace of radial function."""
+        if d2ndr2_g is None:
+            d2ndr2_g = self.empty()
+        dndg_g = 0.5 * (n_g[2:] - n_g[:-2])
+        d2ndg2_g = n_g[2:] - 2 * n_g[1:-1] + n_g[:-2]
+        d2ndr2_g[1:-1] = d2ndg2_g / self.dr_g[1:-1] ** 2 + dndg_g * (
+            self.d2gdr2()[1:-1] + 2 / self.r_g[1:-1] / self.dr_g[1:-1]
+        )
+        d2ndr2_g[0] = d2ndr2_g[1]
+        d2ndr2_g[-1] = d2ndr2_g[-2]
+        return d2ndr2_g
+
+    def calculate_kinetic_energy_density(self, R_g, l):
+        """Calculate kinetic energy density."""
+        tau_g = self.derivative(R_g) ** 2 / (8 * pi)
+        if l > 0:
+            tau_g[1:] += l * (l + 1) * (R_g[1:] / self.r_g[1:]) ** 2 / (8 * pi)
+        return tau_g
 
 
 class Atom:
@@ -50,7 +94,8 @@ class Atom:
 
         # orbs
         self.nj = len(self.n_j)
-        self.u_j = np.zeros((self.nj, self.N))  # radial wave functions
+        self.u_j = np.zeros((self.nj, self.N))  # radial wave functions times radius
+        self.R_j = np.zeros((self.nj, self.N))  # radial wave functions
         self.vr = np.zeros(self.N)  # potential times radius
         self.n = np.zeros(self.N)  # electron density
 
@@ -197,10 +242,43 @@ class Atom:
             Ekin += f * e
 
         self.Ecoul = 2 * pi * np.dot(n * r * (vHr + self.Z), dr)
-        self.Ekin = Ekin - 4 * pi * np.dot(n * vr * r, dr)
+        self.Ekin = Ekin - 4 * pi * np.dot(
+            n * vr * r, dr
+        )  # same as self.calculate_kinetic_energy_density() method
         self.Exc = self.rgd.integrate(self.xc.exc)
         self.Enucl = -4 * pi * np.dot(n * r * self.Z, dr)
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
+
+        # radials
+        for R, u in zip(self.R_j, self.u_j):
+            R[1:] = u[1:] / r[1:]
+            R[0] = R[1]
+
+        # states
+        self.states = {}
+        for n, l, e, f, u in zip(self.n_j, self.l_j, self.e_j, self.f_j, self.u_j):
+            self.states[n, l] = State(e, f, r[1:], u[1:])
+
+        # potential
+        self.potential = Spline(r[1:], vr[1:] / r[1:])
+
+    def calculate_kinetic_energy_density(self):
+        """Calculate kinetic energy density."""
+        dudr = np.zeros(self.N)
+        tau = np.zeros(self.N)
+        r = self.rgd.r_g
+        for f, l, u in zip(self.f_j, self.l_j, self.u_j):
+            self.rgd.derivative(u, dudr)
+            # contribution from angular derivatives
+            if l > 0:
+                tau += f * l * (l + 1) * np.where(abs(u) < 1e-160, 0, u) ** 2
+            # contribution from radial derivatives
+            dudr = u - r * dudr
+            tau += f * np.where(abs(dudr) < 1e-160, 0, dudr) ** 2
+        tau[1:] /= r[1:] ** 4
+        tau[0] = tau[1]
+
+        return 0.5 * tau / (4 * pi)
 
     def get_total_energy(self):
         return sum(self.e_j)
@@ -208,32 +286,29 @@ class Atom:
     def get_number_of_electrons(self):
         return self.rgd.integrate(self.n)
 
+    def get_valence_states(self):
+        return valence_states[self.symbol]
 
-class States:
-    State = namedtuple("state", ["e", "f", "R", "ravg"])
+    def get_rcut(self):
+        return max(state.rcut for state in self.states.values())
 
-    def __init__(self, atom: Atom) -> None:
-        self.atom = atom
-        valence = valence_states[atom.symbol]
+    def get_rmin(self):
+        return self.rgd.r_g[1]
 
-        states = {}
-        r = atom.rgd.r_g
-        R = np.empty_like(r)
-        for j, (n, l) in enumerate(zip(atom.n_j, atom.l_j)):
-            if (n, l) in valence:
-                ravg = atom.rgd.integrate(atom.u_j[j], 1)
-                R[1:] = atom.u_j[j][1:] / r[1:]
-                R[0] = R[1]
-                states[n, l] = States.State(
-                    atom.e_j[j], atom.f_j[j], Spline(r, R.copy()), ravg
-                )
-        self.states = states
 
-    def __getitem__(self, key):
-        return self.states[key]
+class State:
+    def __init__(self, e, f, r, u) -> None:
+        r = r
+        u = u
+        R = u / r
 
-    def get_quantum_numbers(self):
-        return self.states.keys()
+        self.e = e
+        self.f = f
+        self.u = Spline(r, u)
+        self.R = Spline(r, R)
+
+        R2 = R**2
+        self.rcut = r[np.where(R2 > (1e-7 * R2.max()))[0][-1]]
 
 
 def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):
