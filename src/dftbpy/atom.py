@@ -64,12 +64,37 @@ class Grid:
         d2ndr2_g[-1] = d2ndr2_g[-2]
         return d2ndr2_g
 
+    def kin(self, u_g, l):
+        """Radial kinetic operator."""
+        # tau = 0.
+        # for l, f, u in zip(atom.l_j, atom.f_j, atom.u_j):
+        #     tau += f * np.dot(u * kin(u, l), dr_g)
+        dudg_g = 0.5 * (u_g[2:] - u_g[:-2])
+        d2udg2_g = u_g[2:] - 2 * u_g[1:-1] + u_g[:-2]
+        Tu_g = self.empty()
+        Tu_g[1:-1] = -0.5 * (
+            d2udg2_g / self.dr_g[1:-1] ** 2 + dudg_g * self.d2gdr2()[1:-1]
+        )
+        Tu_g[-1] = Tu_g[-2]
+        Tu_g[1:] += 0.5 * l * (l + 1) * u_g[1:] / self.r_g[1:] ** 2
+        Tu_g[0] = Tu_g[1]
+        return Tu_g
+
     def calculate_kinetic_energy_density(self, R_g, l):
         """Calculate kinetic energy density."""
         tau_g = self.derivative(R_g) ** 2 / (8 * pi)
         if l > 0:
             tau_g[1:] += l * (l + 1) * (R_g[1:] / self.r_g[1:]) ** 2 / (8 * pi)
         return tau_g
+
+    def get_cutoff(self, f_g):
+        f_g = abs(f_g)
+        fcut = f_g.max() * 1e-7  # fractional limit
+        g = self.N - 1
+        while f_g[g] < fcut:
+            g -= 1
+        gcut = g + 1
+        return gcut
 
 
 class Atom:
@@ -97,6 +122,7 @@ class Atom:
         self.u_j = np.zeros((self.nj, self.N))  # radial wave functions times radius
         self.R_j = np.zeros((self.nj, self.N))  # radial wave functions
         self.vr = np.zeros(self.N)  # potential times radius
+        self.v = np.zeros(self.N)  # potential
         self.n = np.zeros(self.N)  # electron density
 
     @property
@@ -145,7 +171,7 @@ class Atom:
 
     def calculate_density(self):
         """Calculate radial electron density."""
-        # sum_nl |Rnl(r)|**2/(4*pi)
+        # sum_nl |u_nl(r)|**2/(4*pi*r^2)
         n = np.dot(self.f_j, np.where(abs(self.u_j) < 1e-160, 0, self.u_j) ** 2) / (
             4 * pi
         )
@@ -250,20 +276,35 @@ class Atom:
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
 
         # radials
-        for R, u in zip(self.R_j, self.u_j):
+        d1 = r[1]
+        d2 = r[2]
+        for l, R, u in zip(self.l_j, self.R_j, self.u_j):
             R[1:] = u[1:] / r[1:]
-            R[0] = R[1]
+            if l == 0:
+                # Extrapolation with midpoint formula.
+                R[0] = 0.5 * (R[1] + R[2] + (R[1] - R[2]) * (d1 + d2) / (d2 - d1))
+            else:
+                R[0] = 0
 
         # states
-        self.states = {}
-        for n, l, e, f, u in zip(self.n_j, self.l_j, self.e_j, self.f_j, self.u_j):
-            self.states[n, l] = State(e, f, r[1:], u[1:])
+        # self.states = {}
+        # for n, l, e, f, u in zip(self.n_j, self.l_j, self.e_j, self.f_j, self.u_j):
+        #     self.states[n, l] = State(e, f, r[1:], u[1:])
 
         # potential
-        self.potential = Spline(r[1:], vr[1:] / r[1:])
+        v = self.v
+        v[1:] = self.vr[1:] / r[1:]
+        # Extrapolation with midpoint formula.
+        v = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
+        # self.potential = Spline(r, v)
 
     def calculate_kinetic_energy_density(self):
         """Calculate kinetic energy density."""
+        # Equivalent but more accurate than
+        # tau = self.rgd.zeros()
+        # for l, f, R in zip(self.l_j, self.f_j, self.R_j):
+        #     tau += f * self.rgd.calculate_kinetic_energy_density(R, l)
+        # self.rgd.integrate(tau)
         dudr = np.zeros(self.N)
         tau = np.zeros(self.N)
         r = self.rgd.r_g
@@ -280,17 +321,15 @@ class Atom:
 
         return 0.5 * tau / (4 * pi)
 
-    def get_total_energy(self):
-        return sum(self.e_j)
-
-    def get_number_of_electrons(self):
+    def calculate_number_of_electrons(self):
         return self.rgd.integrate(self.n)
 
     def get_valence_states(self):
         return valence_states[self.symbol]
 
-    def get_rcut(self):
-        return max(state.rcut for state in self.states.values())
+    def get_cutoff(self):
+        gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)
+        return self.rgd.r_g[gcut]
 
     def get_rmin(self):
         return self.rgd.r_g[1]
