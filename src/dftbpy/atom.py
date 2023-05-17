@@ -51,19 +51,6 @@ class Grid:
         hartree(l, nrdr_g, self.r_g, vr_g)
         return vr_g
 
-    def laplace(self, n_g, d2ndr2_g=None):
-        """Laplace of radial function."""
-        if d2ndr2_g is None:
-            d2ndr2_g = self.empty()
-        dndg_g = 0.5 * (n_g[2:] - n_g[:-2])
-        d2ndg2_g = n_g[2:] - 2 * n_g[1:-1] + n_g[:-2]
-        d2ndr2_g[1:-1] = d2ndg2_g / self.dr_g[1:-1] ** 2 + dndg_g * (
-            self.d2gdr2()[1:-1] + 2 / self.r_g[1:-1] / self.dr_g[1:-1]
-        )
-        d2ndr2_g[0] = d2ndr2_g[1]
-        d2ndr2_g[-1] = d2ndr2_g[-2]
-        return d2ndr2_g
-
     def kin(self, u_g, l):
         """Radial kinetic operator."""
         # tau = 0.
@@ -79,6 +66,18 @@ class Grid:
         Tu_g[1:] += 0.5 * l * (l + 1) * u_g[1:] / self.r_g[1:] ** 2
         Tu_g[0] = Tu_g[1]
         return Tu_g
+
+    def kin2(self, R_g, l):
+        # tau = 0.
+        # for l, f, R in zip(atom.l_j, atom.f_j, atom.R_j):
+        #     tau += f * atom.rgd.integrate(R * atom.rgd.kin2(R, l))
+        # tau /= (4*np.pi)
+        dRdg_g = 0.5 * (R_g[2:] - R_g[:-2])
+        TR_g = self.kin(R_g, l)
+        TR_g[1:-1] -= dRdg_g / (self.r_g[1:-1] * self.dr_g[1:-1])
+        TR_g[0] = TR_g[1]
+        TR_g[-1] = TR_g[-2]
+        return TR_g
 
     def calculate_kinetic_energy_density(self, R_g, l):
         """Calculate kinetic energy density."""
@@ -237,11 +236,10 @@ class Atom:
 
         while True:
             # harten potential
-            hartree(0, n * r * dr, r, vHr)
+            hartree(0, n * r * dr, r, vHr)  # radial integration dr r^2
             # nuclear potential
             vHr -= self.Z
             # exchange-correlation potential
-            # print(n.shape, vr.shape, r.shape, self.xc.vxc.shape)
             self.xc.compute(n)
             vr[:] = vHr + self.xc.vxc * r
             # confinement
