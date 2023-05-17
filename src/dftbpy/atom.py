@@ -5,7 +5,6 @@ from ase.data import chemical_symbols
 
 from dftbpy.configs import configurations, valence_states
 from dftbpy.hartree import hartree
-from dftbpy.spline import Spline
 from dftbpy.xcf import LDA
 
 
@@ -273,7 +272,7 @@ class Atom:
         self.Enucl = -4 * pi * np.dot(n * r * self.Z, dr)
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
 
-        # radials
+        # Radial functions
         d1 = r[1]
         d2 = r[2]
         for l, R, u in zip(self.l_j, self.R_j, self.u_j):
@@ -284,17 +283,11 @@ class Atom:
             else:
                 R[0] = 0
 
-        # states
-        # self.states = {}
-        # for n, l, e, f, u in zip(self.n_j, self.l_j, self.e_j, self.f_j, self.u_j):
-        #     self.states[n, l] = State(e, f, r[1:], u[1:])
-
-        # potential
+        # Electronic potential
         v = self.v
         v[1:] = self.vr[1:] / r[1:]
         # Extrapolation with midpoint formula.
         v = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
-        # self.potential = Spline(r, v)
 
     def calculate_kinetic_energy_density(self):
         """Calculate kinetic energy density."""
@@ -329,23 +322,12 @@ class Atom:
         gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)
         return self.rgd.r_g[gcut]
 
-    def get_rmin(self):
-        return self.rgd.r_g[1]
-
-
-class State:
-    def __init__(self, e, f, r, u) -> None:
-        r = r
-        u = u
-        R = u / r
-
-        self.e = e
-        self.f = f
-        self.u = Spline(r, u)
-        self.R = Spline(r, R)
-
-        R2 = R**2
-        self.rcut = r[np.where(R2 > (1e-7 * R2.max()))[0][-1]]
+    def index(self, nl):
+        n, l = nl
+        for j, (n_, l_) in enumerate(zip(self.n_j, self.l_j)):
+            if n_ == n and l_ == l:
+                return j
+        raise RuntimeError("State not found.")
 
 
 def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):
