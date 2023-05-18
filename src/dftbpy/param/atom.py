@@ -3,9 +3,9 @@ from math import log, pi, sqrt
 import numpy as np
 from ase.data import chemical_symbols
 
-from dftbpy.configs import configurations, valence_states
-from dftbpy.hartree import hartree
-from dftbpy.xcf import LDA
+from dftbpy.param.configs import configurations, valence_states
+from dftbpy.param.hartree import hartree
+from dftbpy.param.xcf import LDA
 
 
 class Grid:

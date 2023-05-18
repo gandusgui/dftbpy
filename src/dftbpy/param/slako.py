@@ -4,7 +4,7 @@ from math import acos, cos, sin, sqrt, tan
 import numpy as np
 from ase import Atom
 
-from dftbpy.spline import Spline
+from dftbpy.param.spline import Spline
 
 angular_number = {"s": 0, "p": 1, "d": 2}
 angular_name = {0: "s", 1: "p", 2: "d"}
@@ -138,7 +138,8 @@ def make_grid(Rz, nt, nr, rcut, rmin=1e-7, p=2, q=2):
 
 
 class SlaterKosterTable:
-    def __init__(self, atom1: Atom, atom2: Atom):
+    def __init__(self, atom1: Atom, atom2: Atom = None):
+        atom2 = atom1 if atom2 is None else atom2
         s1 = atom1.symbol
         s2 = atom2.symbol
         self.atoms = {s1: atom1, s2: atom2}
@@ -173,9 +174,11 @@ class SlaterKosterTable:
             r2 = np.sqrt(d**2 + (Rz - z) ** 2)
             # Angular integration
             P = g(np.arccos(z / r1), np.arccos((z - Rz) / r2))
-            # Total potential
+            # Total potential v = v1 + v2 or v = 2 * v1
             # TODO : subtract the confinement potential
-            V = sum(func["v"](ri) for func, ri in zip(self.funcs.values(), (r1, r2)))
+            V = (3 - len(self.pairs)) * sum(
+                func["v"](ri) for func, ri in zip(self.funcs.values(), (r1, r2))
+            )
 
             for s1, s2 in self.pairs:
                 skt = self.skt[(s1, s2)]
@@ -204,3 +207,6 @@ class SlaterKosterTable:
 
                     skt[iR, ski] = H
                     skt[iR, ski + 10] = S
+
+    def __getitem__(self, key):
+        return self.skt[key]
