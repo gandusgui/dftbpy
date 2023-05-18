@@ -168,6 +168,7 @@ class SlaterKosterTable:
 
         for iR, Rz in enumerate(self.R):
             (d, z), dA = make_grid(Rz, nt, nr, rcut=rcut, rmin=rmin)
+            ddA = dA * d  # polar integration factor
 
             # precomputations
             r1 = np.sqrt(d**2 + z**2)
@@ -201,7 +202,6 @@ class SlaterKosterTable:
                     R2 = R2_j[j2](r2)
                     K2 = K2_j[j2](r2)
 
-                    ddA = dA * d  # polar integration factor
                     S = np.dot(R1 * R2 * P[ski], ddA)
                     H = np.dot(R1 * (K2 + V * R2) * P[ski], ddA)
 
