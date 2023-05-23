@@ -3,9 +3,11 @@ from math import log, pi, sqrt
 import numpy as np
 from ase.data import chemical_symbols
 
-from dftbpy.param.configs import configurations, valence_states
+from dftbpy.param.configs import configurations, valence_configurations
 from dftbpy.param.hartree import hartree
 from dftbpy.param.xcf import LDA
+
+angular_number = {"s": 0, "p": 1, "d": 2}
 
 
 class Grid:
@@ -316,7 +318,10 @@ class Atom:
         return self.rgd.integrate(self.n)
 
     def get_valence_states(self):
-        return valence_states[self.symbol]
+        return [
+            (int(n), angular_number[l])
+            for n, l, f in valence_configurations[self.symbol]
+        ]
 
     def get_cutoff(self):
         gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)

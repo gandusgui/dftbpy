@@ -210,3 +210,10 @@ class SlaterKosterTable:
 
     def __getitem__(self, key):
         return self.skt[key]
+
+    def write(self):
+        """write A-B.skf and B-A.skf files."""
+        # dR, N                                       distance, number of points
+        # Ed Ep Es N.A. Ud Up Us fd fp fs             energy, hubbard, cccupation
+        # -------------------------------
+        # Hdd0, Hdd1, Hdd2, .. Sdd0, Sdd1, ... Sss0   Hamiltonian, Overlap
