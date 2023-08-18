@@ -69,7 +69,7 @@ class SlaterKosterPair:
     """Slater-Koster table for a given atom pair."""
 
     def __init__(self, slako) -> None:
-        s1, s2 = slako.atoms.keys()
+        s1, s2 = next(iter(slako.pairs))
         skt12 = slako.tables[s1, s2]
         skt21 = slako.tables[s2, s1]
 
