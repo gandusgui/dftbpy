@@ -163,345 +163,345 @@ class SlaterKosterTransform:
         dst = self.dst
         mxorb = self.mxorb
 
-        l, m, n = rhat
+        x, y, z = rhat
         ll, mm, nn = rhat**2
-        dl = (np.array([1, 0, 0]) - l * rhat) / dist
-        dm = (np.array([0, 1, 0]) - m * rhat) / dist
-        dn = (np.array([0, 0, 1]) - n * rhat) / dist
-        dll, dmm, dnn = 2 * l * dl, 2 * m * dm, 2 * n * dn
+        dx = (np.array([1, 0, 0]) - x * rhat) / dist
+        dy = (np.array([0, 1, 0]) - y * rhat) / dist
+        dz = (np.array([0, 0, 1]) - z * rhat) / dist
+        dxx, dyy, dzz = 2 * x * dx, 2 * y * dy, 2 * z * dz
 
         mat[0, 0, 0] = 1  # ss
         der[0, 0, 0] = 0
         ind[0, 0, 0] = 9
 
         if mxorb >= 2:  # sp
-            mat[0, 1, 0] = l
-            der[0, 1, 0, :] = dl
+            mat[0, 1, 0] = x
+            der[0, 1, 0, :] = dx
             ind[0, 1, 0] = 8
 
-            mat[0, 2, 0] = m
-            der[0, 2, 0, :] = dm
+            mat[0, 2, 0] = y
+            der[0, 2, 0, :] = dy
             ind[0, 2, 0] = 8
 
-            mat[0, 3, 0] = n
-            der[0, 3, 0, :] = dn
+            mat[0, 3, 0] = z
+            der[0, 3, 0, :] = dz
             ind[0, 3, 0] = 8
 
         if mxorb >= 5:  # sd
-            mat[0, 4, 0] = s3 * l * m
-            der[0, 4, 0, :] = s3 * (dl * m + l * dm)
+            mat[0, 4, 0] = s3 * x * y
+            der[0, 4, 0, :] = s3 * (dx * y + x * dy)
             ind[0, 4, 0] = 7
 
-            mat[0, 5, 0] = s3 * m * n
-            der[0, 5, 0, :] = s3 * (dm * n + m * dn)
+            mat[0, 5, 0] = s3 * y * z
+            der[0, 5, 0, :] = s3 * (dy * z + y * dz)
             ind[0, 5, 0] = 7
 
-            mat[0, 6, 0] = s3 * n * l
-            der[0, 6, 0, :] = s3 * (dn * l + n * dl)
+            mat[0, 6, 0] = s3 * z * x
+            der[0, 6, 0, :] = s3 * (dz * x + z * dx)
             ind[0, 6, 0] = 7
 
             mat[0, 7, 0] = 0.5 * s3 * (ll - mm)
-            der[0, 7, 0, :] = 0.5 * s3 * (dll - dmm)
+            der[0, 7, 0, :] = 0.5 * s3 * (dxx - dyy)
             ind[0, 7, 0] = 7
 
             mat[0, 8, 0] = nn - 0.5 * (ll + mm)
-            der[0, 8, 0, :] = dnn - 0.5 * (dll + dmm)
+            der[0, 8, 0, :] = dzz - 0.5 * (dxx + dyy)
             ind[0, 8, 0] = 7
 
         if mxorb >= 2:  # pp
             mat[1, 1, 0:2] = [ll, 1 - ll]
-            der[1, 1, 0:2, :] = [dll, -dll]
+            der[1, 1, 0:2, :] = [dxx, -dxx]
             ind[1, 1, 0:2] = [5, 6]
 
-            mat[1, 2, 0:2] = [l * m, -l * m]
-            der[1, 2, 0:2, :] = [dl * m + l * dm, -(dl * m + l * dm)]
+            mat[1, 2, 0:2] = [x * y, -x * y]
+            der[1, 2, 0:2, :] = [dx * y + x * dy, -(dx * y + x * dy)]
             ind[1, 2, 0:2] = [5, 6]
 
-            mat[1, 3, 0:2] = [l * n, -l * n]
-            der[1, 3, 0:2, :] = [dl * n + l * dn, -(dl * n + l * dn)]
+            mat[1, 3, 0:2] = [x * z, -x * z]
+            der[1, 3, 0:2, :] = [dx * z + x * dz, -(dx * z + x * dz)]
             ind[1, 3, 0:2] = [5, 6]
 
         if mxorb >= 5:  # pd
-            mat[1, 4, 0:2] = [s3 * ll * m, m * (1 - 2 * ll)]
+            mat[1, 4, 0:2] = [s3 * ll * y, y * (1 - 2 * ll)]
             der[1, 4, 0:2, :] = [
-                s3 * (dll * m + ll * dm),
-                dm * (1 - 2 * ll) + m * (-2 * dll),
+                s3 * (dxx * y + ll * dy),
+                dy * (1 - 2 * ll) + y * (-2 * dxx),
             ]
             ind[1, 4, 0:2] = [3, 4]
 
-            mat[1, 5, 0:2] = [s3 * l * m * n, -2 * l * m * n]
+            mat[1, 5, 0:2] = [s3 * x * y * z, -2 * x * y * z]
             der[1, 5, 0:2, :] = [
-                s3 * (dl * m * n + l * dm * n + l * m * dn),
-                -2 * (dl * m * n + l * dm * n + l * m * dn),
+                s3 * (dx * y * z + x * dy * z + x * y * dz),
+                -2 * (dx * y * z + x * dy * z + x * y * dz),
             ]
             ind[1, 5, 0:2] = [3, 4]
 
-            mat[1, 6, 0:2] = [s3 * ll * n, n * (1 - 2 * ll)]
+            mat[1, 6, 0:2] = [s3 * ll * z, z * (1 - 2 * ll)]
             der[1, 6, 0:2, :] = [
-                s3 * (dll * n + ll * dn),
-                dn * (1 - 2 * ll) + n * (-2 * dll),
+                s3 * (dxx * z + ll * dz),
+                dz * (1 - 2 * ll) + z * (-2 * dxx),
             ]
             ind[1, 6, 0:2] = [3, 4]
 
-            mat[1, 7, 0:2] = [0.5 * s3 * l * (ll - mm), l * (1 - ll + mm)]
+            mat[1, 7, 0:2] = [0.5 * s3 * x * (ll - mm), x * (1 - ll + mm)]
             der[1, 7, 0:2, :] = [
-                0.5 * s3 * (dl * (ll - mm) + l * (dll - dmm)),
-                dl * (1 - ll + mm) + l * (-dll + dmm),
+                0.5 * s3 * (dx * (ll - mm) + x * (dxx - dyy)),
+                dx * (1 - ll + mm) + x * (-dxx + dyy),
             ]
             ind[1, 7, 0:2] = [3, 4]
 
-            mat[1, 8, 0:2] = [l * (nn - 0.5 * (ll + mm)), -s3 * l * nn]
+            mat[1, 8, 0:2] = [x * (nn - 0.5 * (ll + mm)), -s3 * x * nn]
             der[1, 8, 0:2, :] = [
-                dl * (nn - 0.5 * (ll + mm)) + l * (dnn - 0.5 * (dll + dmm)),
-                -s3 * (dl * nn + l * dnn),
+                dx * (nn - 0.5 * (ll + mm)) + x * (dzz - 0.5 * (dxx + dyy)),
+                -s3 * (dx * nn + x * dzz),
             ]
             ind[1, 8, 0:2] = [3, 4]
 
         if mxorb >= 2:
             mat[2, 2, 0:2] = [mm, 1 - mm]
-            der[2, 2, 0:2, :] = [dmm, -dmm]
+            der[2, 2, 0:2, :] = [dyy, -dyy]
             ind[2, 2, 0:2] = [5, 6]
 
-            mat[2, 3, 0:2] = [m * n, -m * n]
-            der[2, 3, 0:2, :] = [dm * n + m * dn, -(dm * n + m * dn)]
+            mat[2, 3, 0:2] = [y * z, -y * z]
+            der[2, 3, 0:2, :] = [dy * z + y * dz, -(dy * z + y * dz)]
             ind[2, 3, 0:2] = [5, 6]
 
         if mxorb >= 5:
-            mat[2, 4, 0:2] = [s3 * mm * l, l * (1 - 2 * mm)]
+            mat[2, 4, 0:2] = [s3 * mm * x, x * (1 - 2 * mm)]
             der[2, 4, 0:2, :] = [
-                s3 * (dmm * l + mm * dl),
-                dl * (1 - 2 * mm) + l * (-2 * dmm),
+                s3 * (dyy * x + mm * dx),
+                dx * (1 - 2 * mm) + x * (-2 * dyy),
             ]
             ind[2, 4, 0:2] = [3, 4]
 
-            mat[2, 5, 0:2] = [s3 * mm * n, n * (1 - 2 * mm)]
+            mat[2, 5, 0:2] = [s3 * mm * z, z * (1 - 2 * mm)]
             der[2, 5, 0:2, :] = [
-                s3 * (dmm * n + mm * dn),
-                dn * (1 - 2 * mm) + n * (-2 * dmm),
+                s3 * (dyy * z + mm * dz),
+                dz * (1 - 2 * mm) + z * (-2 * dyy),
             ]
             ind[2, 5, 0:2] = [3, 4]
 
-            mat[2, 6, 0:2] = [s3 * m * n * l, -2 * m * n * l]
+            mat[2, 6, 0:2] = [s3 * y * z * x, -2 * y * z * x]
             der[2, 6, 0:2, :] = [
-                s3 * (dm * n * l + m * dn * l + m * n * dl),
-                -2 * (dm * n * l + m * dn * l + m * n * dl),
+                s3 * (dy * z * x + y * dz * x + y * z * dx),
+                -2 * (dy * z * x + y * dz * x + y * z * dx),
             ]
             ind[2, 6, 0:2] = [3, 4]
 
-            mat[2, 7, 0:2] = [0.5 * s3 * m * (ll - mm), -m * (1 + ll - mm)]
+            mat[2, 7, 0:2] = [0.5 * s3 * y * (ll - mm), -y * (1 + ll - mm)]
             der[2, 7, 0:2, :] = [
-                0.5 * s3 * (dm * (ll - mm) + m * (dll - dmm)),
-                -(dm * (1 + ll - mm) + m * (dll - dmm)),
+                0.5 * s3 * (dy * (ll - mm) + y * (dxx - dyy)),
+                -(dy * (1 + ll - mm) + y * (dxx - dyy)),
             ]
             ind[2, 7, 0:2] = [3, 4]
 
-            mat[2, 8, 0:2] = [m * (nn - 0.5 * (ll + mm)), -s3 * m * nn]
+            mat[2, 8, 0:2] = [y * (nn - 0.5 * (ll + mm)), -s3 * y * nn]
             der[2, 8, 0:2, :] = [
-                dm * (nn - 0.5 * (ll + mm)) + m * (dnn - 0.5 * (dll + dmm)),
-                -s3 * (dm * nn + m * dnn),
+                dy * (nn - 0.5 * (ll + mm)) + y * (dzz - 0.5 * (dxx + dyy)),
+                -s3 * (dy * nn + y * dzz),
             ]
             ind[2, 8, 0:2] = [3, 4]
 
         if mxorb >= 2:
             mat[3, 3, 0:2] = [nn, 1 - nn]
-            der[3, 3, 0:2, :] = [dnn, -dnn]
+            der[3, 3, 0:2, :] = [dzz, -dzz]
             ind[3, 3, 0:2] = [5, 6]
 
         if mxorb >= 5:
-            mat[3, 4, 0:2] = [s3 * l * m * n, -2 * m * n * l]
+            mat[3, 4, 0:2] = [s3 * x * y * z, -2 * y * z * x]
             der[3, 4, 0:2, :] = [
-                s3 * (dl * m * n + l * dm * n + l * m * dn),
-                -2 * (dm * n * l + m * dn * l + m * n * dl),
+                s3 * (dx * y * z + x * dy * z + x * y * dz),
+                -2 * (dy * z * x + y * dz * x + y * z * dx),
             ]
             ind[3, 4, 0:2] = [3, 4]
 
-            mat[3, 5, 0:2] = [s3 * nn * m, m * (1 - 2 * nn)]
+            mat[3, 5, 0:2] = [s3 * nn * y, y * (1 - 2 * nn)]
             der[3, 5, 0:2, :] = [
-                s3 * (dnn * m + nn * dm),
-                dm * (1 - 2 * nn) + m * (-2 * dnn),
+                s3 * (dzz * y + nn * dy),
+                dy * (1 - 2 * nn) + y * (-2 * dzz),
             ]
             ind[3, 5, 0:2] = [3, 4]
 
-            mat[3, 6, 0:2] = [s3 * nn * l, l * (1 - 2 * nn)]
+            mat[3, 6, 0:2] = [s3 * nn * x, x * (1 - 2 * nn)]
             der[3, 6, 0:2, :] = [
-                s3 * (dnn * l + nn * dl),
-                dl * (1 - 2 * nn) + l * (-2 * dnn),
+                s3 * (dzz * x + nn * dx),
+                dx * (1 - 2 * nn) + x * (-2 * dzz),
             ]
             ind[3, 6, 0:2] = [3, 4]
 
-            mat[3, 7, 0:2] = [0.5 * s3 * n * (ll - mm), -n * (ll - mm)]
+            mat[3, 7, 0:2] = [0.5 * s3 * z * (ll - mm), -z * (ll - mm)]
             der[3, 7, 0:2, :] = [
-                0.5 * s3 * (dn * (ll - mm) + n * (dll - dmm)),
-                -(dn * (ll - mm) + n * (dll - dmm)),
+                0.5 * s3 * (dz * (ll - mm) + z * (dxx - dyy)),
+                -(dz * (ll - mm) + z * (dxx - dyy)),
             ]
             ind[3, 7, 0:2] = [3, 4]
 
-            mat[3, 8, 0:2] = [n * (nn - 0.5 * (ll + mm)), s3 * n * (ll + mm)]
+            mat[3, 8, 0:2] = [z * (nn - 0.5 * (ll + mm)), s3 * z * (ll + mm)]
             der[3, 8, 0:2, :] = [
-                dn * (nn - 0.5 * (ll + mm)) + n * (dnn - 0.5 * (dll + dmm)),
-                s3 * (dn * (ll + mm) + n * (dll + dmm)),
+                dz * (nn - 0.5 * (ll + mm)) + z * (dzz - 0.5 * (dxx + dyy)),
+                s3 * (dz * (ll + mm) + z * (dxx + dyy)),
             ]
             ind[3, 8, 0:2] = [3, 4]
 
         if mxorb >= 5:
             mat[4, 4, 0:3] = [3 * ll * mm, ll + mm - 4 * ll * mm, nn + ll * mm]
             der[4, 4, 0:3, :] = [
-                3 * (dll * mm + ll * dmm),
-                dll + dmm - 4 * (dll * mm + ll * dmm),
-                dnn + (dll * mm + ll * dmm),
+                3 * (dxx * mm + ll * dyy),
+                dxx + dyy - 4 * (dxx * mm + ll * dyy),
+                dzz + (dxx * mm + ll * dyy),
             ]
             ind[4, 4, 0:3] = [0, 1, 2]
 
-            mat[4, 5, 0:3] = [3 * l * mm * n, l * n * (1 - 4 * mm), l * n * (mm - 1)]
+            mat[4, 5, 0:3] = [3 * x * mm * z, x * z * (1 - 4 * mm), x * z * (mm - 1)]
             der[4, 5, 0:3, :] = [
-                3 * (dl * mm * n + l * dmm * n + l * mm * dn),
-                dl * n * (1 - 4 * mm) + l * dn * (1 - 4 * mm) + l * n * (-4 * dmm),
-                dl * n * (mm - 1) + l * dn * (mm - 1) + l * n * (dmm),
+                3 * (dx * mm * z + x * dyy * z + x * mm * dz),
+                dx * z * (1 - 4 * mm) + x * dz * (1 - 4 * mm) + x * z * (-4 * dyy),
+                dx * z * (mm - 1) + x * dz * (mm - 1) + x * z * dyy,
             ]
             ind[4, 5, 0:3] = [0, 1, 2]
 
-            mat[4, 6, 0:3] = [3 * ll * m * n, m * n * (1 - 4 * ll), m * n * (ll - 1)]
+            mat[4, 6, 0:3] = [3 * ll * y * z, y * z * (1 - 4 * ll), y * z * (ll - 1)]
             der[4, 6, 0:3, :] = [
-                3 * (dll * m * n + ll * dm * n + ll * m * dn),
-                dm * n * (1 - 4 * ll) + m * dn * (1 - 4 * ll) + m * n * (-4 * dll),
-                dm * n * (ll - 1) + m * dn * (ll - 1) + m * n * (dll),
+                3 * (dxx * y * z + ll * dy * z + ll * y * dz),
+                dy * z * (1 - 4 * ll) + y * dz * (1 - 4 * ll) + y * z * (-4 * dxx),
+                dy * z * (ll - 1) + y * dz * (ll - 1) + y * z * dxx,
             ]
             ind[4, 6, 0:3] = [0, 1, 2]
 
             mat[4, 7, 0:3] = [
-                1.5 * l * m * (ll - mm),
-                2 * l * m * (mm - ll),
-                0.5 * l * m * (ll - mm),
+                1.5 * x * y * (ll - mm),
+                2 * x * y * (mm - ll),
+                0.5 * x * y * (ll - mm),
             ]
             der[4, 7, 0:3, :] = [
-                1.5 * (dl * m * (ll - mm) + l * dm * (ll - mm) + l * m * (dll - dmm)),
-                2 * (dl * m * (mm - ll) + l * dm * (mm - ll) + l * m * (dmm - dll)),
-                0.5 * (dl * m * (ll - mm) + l * dm * (ll - mm) + l * m * (dll - dmm)),
+                1.5 * (dx * y * (ll - mm) + x * dy * (ll - mm) + x * y * (dxx - dyy)),
+                2 * (dx * y * (mm - ll) + x * dy * (mm - ll) + x * y * (dyy - dxx)),
+                0.5 * (dx * y * (ll - mm) + x * dy * (ll - mm) + x * y * (dxx - dyy)),
             ]
             ind[4, 7, 0:3] = [0, 1, 2]
 
             mat[4, 8, 0:3] = [
-                s3 * l * m * (nn - 0.5 * (ll + mm)),
-                -2 * s3 * l * m * nn,
-                0.5 * s3 * l * m * (1 + nn),
+                s3 * x * y * (nn - 0.5 * (ll + mm)),
+                -2 * s3 * x * y * nn,
+                0.5 * s3 * x * y * (1 + nn),
             ]
             der[4, 8, 0:3, :] = [
                 s3
                 * (
-                    dl * m * (nn - 0.5 * (ll + mm))
-                    + l * dm * (nn - 0.5 * (ll + mm))
-                    + l * m * (dnn - 0.5 * (dll + dmm))
+                    dx * y * (nn - 0.5 * (ll + mm))
+                    + x * dy * (nn - 0.5 * (ll + mm))
+                    + x * y * (dzz - 0.5 * (dxx + dyy))
                 ),
-                -2 * s3 * (dl * m * nn + l * dm * nn + l * m * dnn),
-                0.5 * s3 * (dl * m * (1 + nn) + l * dm * (1 + nn) + l * m * (dnn)),
+                -2 * s3 * (dx * y * nn + x * dy * nn + x * y * dzz),
+                0.5 * s3 * (dx * y * (1 + nn) + x * dy * (1 + nn) + x * y * dzz),
             ]
             ind[4, 8, 0:3] = [0, 1, 2]
 
             mat[5, 5, 0:3] = [3 * mm * nn, (mm + nn - 4 * mm * nn), (ll + mm * nn)]
             der[5, 5, 0:3, :] = [
-                3 * (dmm * nn + mm * dnn),
-                (dmm + dnn - 4 * (dmm * nn + mm * dnn)),
-                (dll + dmm * nn + mm * dnn),
+                3 * (dyy * nn + mm * dzz),
+                (dyy + dzz - 4 * (dyy * nn + mm * dzz)),
+                (dxx + dyy * nn + mm * dzz),
             ]
             ind[5, 5, 0:3] = [0, 1, 2]
 
-            mat[5, 6, 0:3] = [3 * m * nn * l, m * l * (1 - 4 * nn), m * l * (nn - 1)]
+            mat[5, 6, 0:3] = [3 * y * nn * x, y * x * (1 - 4 * nn), y * x * (nn - 1)]
             der[5, 6, 0:3, :] = [
-                3 * (dm * nn * l + m * dnn * l + m * nn * dl),
-                dm * l * (1 - 4 * nn) + m * dl * (1 - 4 * nn) + m * l * (-4 * dnn),
-                dm * l * (nn - 1) + m * dl * (nn - 1) + m * l * (dnn),
+                3 * (dy * nn * x + y * dzz * x + y * nn * dx),
+                dy * x * (1 - 4 * nn) + y * dx * (1 - 4 * nn) + y * x * (-4 * dzz),
+                dy * x * (nn - 1) + y * dx * (nn - 1) + y * x * dzz,
             ]
             ind[5, 6, 0:3] = [0, 1, 2]
 
             mat[5, 7, 0:3] = [
-                1.5 * m * n * (ll - mm),
-                -m * n * (1 + 2 * (ll - mm)),
-                m * n * (1 + 0.5 * (ll - mm)),
+                1.5 * y * z * (ll - mm),
+                -y * z * (1 + 2 * (ll - mm)),
+                y * z * (1 + 0.5 * (ll - mm)),
             ]
             der[5, 7, 0:3, :] = [
-                1.5 * (dm * n * (ll - mm) + m * dn * (ll - mm) + m * n * (dll - dmm)),
+                1.5 * (dy * z * (ll - mm) + y * dz * (ll - mm) + y * z * (dxx - dyy)),
                 -(
-                    dm * n * (1 + 2 * (ll - mm))
-                    + m * dn * (1 + 2 * (ll - mm))
-                    + m * n * (2 * dll - 2 * dmm)
+                    dy * z * (1 + 2 * (ll - mm))
+                    + y * dz * (1 + 2 * (ll - mm))
+                    + y * z * (2 * dxx - 2 * dyy)
                 ),
-                dm * n * (1 + 0.5 * (ll - mm))
-                + m * dn * (1 + 0.5 * (ll - mm))
-                + m * n * (0.5 * (dll - dmm)),
+                dy * z * (1 + 0.5 * (ll - mm))
+                + y * dz * (1 + 0.5 * (ll - mm))
+                + y * z * (0.5 * (dxx - dyy)),
             ]
             ind[5, 7, 0:3] = [0, 1, 2]
 
             mat[5, 8, 0:3] = [
-                s3 * m * n * (nn - 0.5 * (ll + mm)),
-                s3 * m * n * (ll + mm - nn),
-                -0.5 * s3 * m * n * (ll + mm),
+                s3 * y * z * (nn - 0.5 * (ll + mm)),
+                s3 * y * z * (ll + mm - nn),
+                -0.5 * s3 * y * z * (ll + mm),
             ]
             der[5, 8, 0:3, :] = [
                 s3
                 * (
-                    dm * n * (nn - 0.5 * (ll + mm))
-                    + m * dn * (nn - 0.5 * (ll + mm))
-                    + m * n * (dnn - 0.5 * (dll + dmm))
+                    dy * z * (nn - 0.5 * (ll + mm))
+                    + y * dz * (nn - 0.5 * (ll + mm))
+                    + y * z * (dzz - 0.5 * (dxx + dyy))
                 ),
                 s3
                 * (
-                    dm * n * (ll + mm - nn)
-                    + m * dn * (ll + mm - nn)
-                    + m * n * (dll + dmm - dnn)
+                    dy * z * (ll + mm - nn)
+                    + y * dz * (ll + mm - nn)
+                    + y * z * (dxx + dyy - dzz)
                 ),
                 -0.5
                 * s3
-                * (dm * n * (ll + mm) + m * dn * (ll + mm) + m * n * (dll + dmm)),
+                * (dy * z * (ll + mm) + y * dz * (ll + mm) + y * z * (dxx + dyy)),
             ]
             ind[5, 8, 0:3] = [0, 1, 2]
 
             mat[6, 6, 0:3] = [3 * nn * ll, (nn + ll - 4 * nn * ll), (mm + nn * ll)]
             der[6, 6, 0:3, :] = [
-                3 * (dnn * ll + nn * dll),
-                dnn + dll - 4 * (dnn * ll + nn * dll),
-                (dmm + dnn * ll + nn * dll),
+                3 * (dzz * ll + nn * dxx),
+                dzz + dxx - 4 * (dzz * ll + nn * dxx),
+                (dyy + dzz * ll + nn * dxx),
             ]
             ind[6, 6, 0:3] = [0, 1, 2]
 
             mat[6, 7, 0:3] = [
-                1.5 * n * l * (ll - mm),
-                n * l * (1 - 2 * (ll - mm)),
-                -n * l * (1 - 0.5 * (ll - mm)),
+                1.5 * z * x * (ll - mm),
+                z * x * (1 - 2 * (ll - mm)),
+                -z * x * (1 - 0.5 * (ll - mm)),
             ]
             der[6, 7, 0:3, :] = [
-                1.5 * (dn * l * (ll - mm) + n * dl * (ll - mm) + n * l * (dll - dmm)),
-                dn * l * (1 - 2 * (ll - mm))
-                + n * dl * (1 - 2 * (ll - mm))
-                + n * l * (-2 * (dll - dmm)),
+                1.5 * (dz * x * (ll - mm) + z * dx * (ll - mm) + z * x * (dxx - dyy)),
+                dz * x * (1 - 2 * (ll - mm))
+                + z * dx * (1 - 2 * (ll - mm))
+                + z * x * (-2 * (dxx - dyy)),
                 -(
-                    dn * l * (1 - 0.5 * (ll - mm))
-                    + n * dl * (1 - 0.5 * (ll - mm))
-                    + n * l * (-0.5 * (dll - dmm))
+                    dz * x * (1 - 0.5 * (ll - mm))
+                    + z * dx * (1 - 0.5 * (ll - mm))
+                    + z * x * (-0.5 * (dxx - dyy))
                 ),
             ]
             ind[6, 7, 0:3] = [0, 1, 2]
 
             mat[6, 8, 0:3] = [
-                s3 * l * n * (nn - 0.5 * (ll + mm)),
-                s3 * l * n * (ll + mm - nn),
-                -0.5 * s3 * l * n * (ll + mm),
+                s3 * x * z * (nn - 0.5 * (ll + mm)),
+                s3 * x * z * (ll + mm - nn),
+                -0.5 * s3 * x * z * (ll + mm),
             ]
             der[6, 8, 0:3, :] = [
                 s3
                 * (
-                    dl * n * (nn - 0.5 * (ll + mm))
-                    + l * dn * (nn - 0.5 * (ll + mm))
-                    + l * n * (dnn - 0.5 * (dll + dmm))
+                    dx * z * (nn - 0.5 * (ll + mm))
+                    + x * dz * (nn - 0.5 * (ll + mm))
+                    + x * z * (dzz - 0.5 * (dxx + dyy))
                 ),
                 s3
                 * (
-                    dl * n * (ll + mm - nn)
-                    + l * dn * (ll + mm - nn)
-                    + l * n * (dll + dmm - dnn)
+                    dx * z * (ll + mm - nn)
+                    + x * dz * (ll + mm - nn)
+                    + x * z * (dxx + dyy - dzz)
                 ),
                 -0.5
                 * s3
-                * (dl * n * (ll + mm) + l * dn * (ll + mm) + l * n * (dll + dmm)),
+                * (dx * z * (ll + mm) + x * dz * (ll + mm) + x * z * (dxx + dyy)),
             ]
             ind[6, 8, 0:3] = [0, 1, 2]
 
@@ -511,9 +511,9 @@ class SlaterKosterTransform:
                 (nn + 0.25 * (ll - mm) ** 2),
             ]
             der[7, 7, 0:3, :] = [
-                0.75 * 2 * (ll - mm) * (dll - dmm),
-                (dll + dmm - 2 * (ll - mm) * (dll - dmm)),
-                (dnn + 0.25 * 2 * (ll - mm) * (dll - dmm)),
+                0.75 * 2 * (ll - mm) * (dxx - dyy),
+                (dxx + dyy - 2 * (ll - mm) * (dxx - dyy)),
+                (dzz + 0.25 * 2 * (ll - mm) * (dxx - dyy)),
             ]
             ind[7, 7, 0:3] = [0, 1, 2]
 
@@ -526,11 +526,11 @@ class SlaterKosterTransform:
                 0.5
                 * s3
                 * (
-                    (dll - dmm) * (nn - 0.5 * (ll + mm))
-                    + (ll - mm) * (dnn - 0.5 * (dll + dmm))
+                    (dxx - dyy) * (nn - 0.5 * (ll + mm))
+                    + (ll - mm) * (dzz - 0.5 * (dxx + dyy))
                 ),
-                s3 * (dnn * (mm - ll) + nn * (dmm - dll)),
-                0.25 * s3 * (dnn * (ll - mm) + (1 + nn) * (dll - dmm)),
+                s3 * (dzz * (mm - ll) + nn * (dyy - dxx)),
+                0.25 * s3 * (dzz * (ll - mm) + (1 + nn) * (dxx - dyy)),
             ]
             ind[7, 8, 0:3] = [0, 1, 2]
 
@@ -540,9 +540,9 @@ class SlaterKosterTransform:
                 0.75 * (ll + mm) ** 2,
             ]
             der[8, 8, 0:3, :] = [
-                2 * (nn - 0.5 * (ll + mm)) * (dnn - 0.5 * (dll + dmm)),
-                3 * (dnn * (ll + mm) + nn * (dll + dmm)),
-                0.75 * 2 * (ll + mm) * (dll + dmm),
+                2 * (nn - 0.5 * (ll + mm)) * (dzz - 0.5 * (dxx + dyy)),
+                3 * (dzz * (ll + mm) + nn * (dxx + dyy)),
+                0.75 * 2 * (ll + mm) * (dxx + dyy),
             ]
             ind[8, 8, 0:3] = [0, 1, 2]
 
