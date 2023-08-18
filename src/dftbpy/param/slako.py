@@ -6,17 +6,12 @@ from ase import Atom
 
 from dftbpy.param.spline import Spline
 
-angular_number = {"s": 0, "p": 1, "d": 2}
-angular_name = {0: "s", 1: "p", 2: "d"}
-
 slako_integrals = ["dds", "ddp", "ddd", "pds", "pdp", "pps", "ppp", "sds", "sps", "sss"]
 
 
 def select_integrals(nl1_j, nl2_j):
     selected = []
-    for integral in slako_integrals:
-        l1 = angular_number[integral[0]]
-        l2 = angular_number[integral[1]]
+    for ski, (l1, l2, itype) in enumerate(slako_integrals):
         s1_j = []
         for nl in nl1_j:
             if l1 == nl[1]:
@@ -31,7 +26,7 @@ def select_integrals(nl1_j, nl2_j):
             continue
         for nl1 in s1_j:
             for nl2 in s2_j:
-                selected.append((integral, nl1, nl2))
+                selected.append((ski, nl1, nl2))
     return selected
 
 
@@ -138,6 +133,8 @@ def make_grid(Rz, nt, nr, rcut, rmin=1e-7, p=2, q=2):
 
 
 class SlaterKosterTable:
+    """Slater-Koster table for two atoms."""
+
     def __init__(self, atom1: Atom, atom2: Atom = None):
         atom2 = atom1 if atom2 is None else atom2
         s1 = atom1.symbol
@@ -164,7 +161,7 @@ class SlaterKosterTable:
         # Atomic distances
         self.R = np.linspace(R1, R2, N, endpoint=True)
         # Slater-Koster tables
-        self.skt = {(s1, s2): np.zeros((N, 20)) for s1, s2 in self.pairs}
+        self.tables = {(s1, s2): np.zeros((N, 20)) for s1, s2 in self.pairs}
 
         for iR, Rz in enumerate(self.R):
             (d, z), dA = make_grid(Rz, nt, nr, rcut=rcut, rmin=rmin)
@@ -182,7 +179,7 @@ class SlaterKosterTable:
             )
 
             for s1, s2 in self.pairs:
-                skt = self.skt[(s1, s2)]
+                skt = self.tables[(s1, s2)]
                 R1_j = self.funcs[s1]["R_j"]
                 R2_j = self.funcs[s2]["R_j"]
                 K2_j = self.funcs[s2]["K_j"]
@@ -192,10 +189,9 @@ class SlaterKosterTable:
                     self.atoms[s2].get_valence_states(),
                 )
 
-                skt = self.skt[(s1, s2)]
+                skt = self.tables[(s1, s2)]
 
-                for slako, nl1, nl2 in selected:
-                    ski = slako_integrals.index(slako)
+                for ski, nl1, nl2 in selected:
                     j1 = self.atoms[s1].index(nl1)
                     j2 = self.atoms[s2].index(nl2)
                     R1 = R1_j[j1](r1)
@@ -209,11 +205,4 @@ class SlaterKosterTable:
                     skt[iR, ski + 10] = S
 
     def __getitem__(self, key):
-        return self.skt[key]
-
-    def write(self):
-        """write A-B.skf and B-A.skf files."""
-        # dR, N                                       distance, number of points
-        # Ed Ep Es N.A. Ud Up Us fd fp fs             energy, hubbard, cccupation
-        # -------------------------------
-        # Hdd0, Hdd1, Hdd2, .. Sdd0, Sdd1, ... Sss0   Hamiltonian, Overlap
+        return self.tables[key]

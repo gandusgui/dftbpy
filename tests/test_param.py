@@ -24,7 +24,7 @@ def test_slako():
     atom.v /= 2.0  # half the potential, H should give e_j
     slako = SlaterKosterTable(atom)
     slako.run(0.0, 0.2, 3)
-    table = slako.skt[("O", "O")]
+    table = slako.tables[("O", "O")]
     # precision to 1e-4 [Hartee]
     assert abs(table[0, 5] - atom.e_j[2]) < 1e-4  # p integral
     assert abs(table[0, 6] - atom.e_j[2]) < 1e-4  # p integral

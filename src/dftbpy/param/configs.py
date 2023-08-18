@@ -1,3 +1,7 @@
+angular_number = {"s": 0, "p": 1, "d": 2, "f": 3}
+angular_name = {0: "s", 1: "p", 2: "d", 3: "f"}
+
+
 # format: (energy in Hartrees)
 #    'element': (atomic number, [(n, l, occ, energy), ...])
 

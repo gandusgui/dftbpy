@@ -3,11 +3,9 @@ from math import log, pi, sqrt
 import numpy as np
 from ase.data import chemical_symbols
 
-from dftbpy.param.configs import configurations, valence_configurations
+from dftbpy.param.configs import angular_number, configurations, valence_configurations
 from dftbpy.param.hartree import hartree
 from dftbpy.param.xcf import LDA
-
-angular_number = {"s": 0, "p": 1, "d": 2}
 
 
 class Grid:
@@ -261,6 +259,7 @@ class Atom:
             if niter > nitermax:
                 raise RuntimeError("Maximum number of iterations exceeded!")
 
+        self.e_j = np.array(self.e_j)
         # Energy contributions
         Ekin = 0.0
         for f, e in zip(self.f_j, self.e_j):
@@ -317,18 +316,36 @@ class Atom:
     def calculate_number_of_electrons(self):
         return self.rgd.integrate(self.n)
 
+    # @property
+    # def valence_configuration(self):
+    #     self.valence_config = {}
+    #     self.n_valence_els = 0
+    #     self.n_valence_orbs = 0
+    #     for nl in map(lambda nlf: nlf[:2],valence_configurations[self.symbol]):
+    #         j = self.index(nl)
+    #         self.n_valence_els += self.f_j[j]
+    #         self.n_valence_orbs += 2*self.l_j[j]+1
+    #         self.valence_config[nl] = self.e_j[j], self.f_j[j]
+
     def get_valence_states(self):
-        return [
-            (int(n), angular_number[l])
-            for n, l, f in valence_configurations[self.symbol]
-        ]
+        """Return list of nl valence states."""
+        return [nlf[:2] for nlf in valence_configurations[self.symbol]]
+
+    def get_number_of_valence_electrons(self):
+        """Return number of valence orbitals."""
+        return sum(self.f_j[self.index(nl)] for nl in self.get_valence_states())
+
+    def get_number_of_valence_orbitals(self):
+        """Return number of valence orbitals."""
+        return sum(2 * self.l_j[self.index(nl)] + 1 for nl in self.get_valence_states())
 
     def get_cutoff(self):
         gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)
         return self.rgd.r_g[gcut]
 
     def index(self, nl):
-        n, l = nl
+        """Return index of nl state."""
+        n, l = int(nl[0]), angular_number[nl[1]]
         for j, (n_, l_) in enumerate(zip(self.n_j, self.l_j)):
             if n_ == n and l_ == l:
                 return j
