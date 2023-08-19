@@ -115,13 +115,13 @@ class SlaterKosterPair:
         no2 = slako.atoms[s2].get_number_of_valence_orbitals()
         self.tranform = SlaterKosterTransform(no1, no2)
 
-    def __call__(self, rhat, dist) -> Any:
+    def __call__(self, rho, dist) -> Any:
         h, s, dh, ds = self.table(dist)
         self.h[self.skindices] = h
         self.s[self.skindices] = s
-        self.dh[self.skindices] = np.outer(dh, rhat)
-        self.ds[self.skindices] = np.outer(ds, rhat)
-        return self.tranform(rhat, dist, self.h, self.s, self.dh, self.ds)
+        self.dh[self.skindices] = np.outer(dh, rho)
+        self.ds[self.skindices] = np.outer(ds, rho)
+        return self.tranform(rho, dist, self.h, self.s, self.dh, self.ds)
 
 
 class SlaterKosterTransform:
@@ -144,7 +144,7 @@ class SlaterKosterTransform:
         self.dst = np.zeros((no1, no2, 3))
         self.mxorb = max(no1, no2)
 
-    def __call__(self, rhat, dist, h, s, dh, ds) -> Any:
+    def __call__(self, rho, dist, h, s, dh, ds) -> Any:
         """
         Apply Slater-Koster transformation rules to orbitals iorbs and orbitals jorbs,
         where rhat is vector i->j and table gives the values for given tabulated
@@ -163,11 +163,11 @@ class SlaterKosterTransform:
         dst = self.dst
         mxorb = self.mxorb
 
-        x, y, z = rhat
-        ll, mm, nn = rhat**2
-        dx = (np.array([1, 0, 0]) - x * rhat) / dist
-        dy = (np.array([0, 1, 0]) - y * rhat) / dist
-        dz = (np.array([0, 0, 1]) - z * rhat) / dist
+        x, y, z = rho
+        ll, mm, nn = rho**2
+        dx = (np.array([1, 0, 0]) - x * rho) / dist
+        dy = (np.array([0, 1, 0]) - y * rho) / dist
+        dz = (np.array([0, 0, 1]) - z * rho) / dist
         dxx, dyy, dzz = 2 * x * dx, 2 * y * dy, 2 * z * dz
 
         mat[0, 0, 0] = 1  # ss
