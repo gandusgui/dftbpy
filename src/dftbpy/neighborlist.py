@@ -1,5 +1,6 @@
 import numpy as np
 from ase.neighborlist import first_neighbors, primitive_neighbor_list
+from ase.units import Bohr
 
 
 class NeighborList:
@@ -17,10 +18,11 @@ class NeighborList:
         """Make sure the list is up to date."""
         pbc = atoms.pbc
         cell = atoms.cell
-        positions = atoms.positions
+        positions = atoms.positions / Bohr
+        numbers = atoms.numbers
 
         if self.nupdates == 0:
-            self.build(pbc, cell, positions)
+            self.build(pbc, cell, positions, numbers)
             return True
 
         if (
@@ -28,12 +30,12 @@ class NeighborList:
             or (self.cell != cell).any()
             or ((self.positions - positions) ** 2).sum(1).max() > self.skin**2
         ):
-            self.build(pbc, cell, positions)
+            self.build(pbc, cell, positions, numbers)
             return True
 
         return False
 
-    def build(self, pbc, cell, positions):
+    def build(self, pbc, cell, positions, numbers):
         """Build the list."""
         self.pbc = np.array(pbc, copy=True)
         self.cell = np.array(cell, copy=True)
@@ -43,7 +45,8 @@ class NeighborList:
             pbc,
             cell,
             positions,
-            self.cutoffs,
+            cutoff=self.cutoffs,
+            numbers=numbers,
             self_interaction=self.self_interaction,
             use_scaled_positions=False,
         )
@@ -74,7 +77,8 @@ class NeighborList:
 
         self.i = i
         self.j = j
-        self.rho = d / D  # self_interaction=False, no D==0.
+        self.d = d
+        self.rho = D / d[:, None]  # self_interaction=False, no D==0.
         self.D = D
 
         self.first_neigh = first_neighbors(len(positions), i)
@@ -82,9 +86,17 @@ class NeighborList:
         self.nupdates += 1
 
     def get_neighbors(self, a):
-        """Return the neighbors of atom a."""
+        """Return the neighbors of atom a.
+
+        Returns:
+            j: indices of neighbors
+            rho: distance unit vector to neighbors,
+                i.e. abs(rho)'s = 1.
+            d: absolute distance to neighbors,
+                i.e. positions[a] + d * rho = positions of a' neighbors.
+        """
         return (
             self.j[self.first_neigh[a] : self.first_neigh[a + 1]],
             self.rho[self.first_neigh[a] : self.first_neigh[a + 1]],
-            self.D[self.first_neigh[a] : self.first_neigh[a + 1]],
+            self.d[self.first_neigh[a] : self.first_neigh[a + 1]],
         )
