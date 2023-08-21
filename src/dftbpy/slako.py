@@ -65,42 +65,44 @@ class SlaterKosterSpline(CubicSpline):
         return h, s, dh, ds
 
 
-class SlaterKosterPair:
+class SlaterKosterParam:
     """Slater-Koster table for a given atom pair."""
 
-    def __init__(self, slako) -> None:
+    def __init__(self, slako, transpose=False) -> None:
         s1, s2 = next(iter(slako.pairs))
+        if transpose:
+            s2, s1 = s1, s2
         skt12 = slako.tables[s1, s2]
         skt21 = slako.tables[s2, s1]
 
-        # dict of columns for overlap
-        cols = {}
-        for n1, l1 in slako.atoms[s1].get_valence_states():
-            for n2, l2 in slako.atoms[s2].get_valence_states():
+        # dict of sk integrals
+        hsi = {}
+        for n1, l1 in slako.atoms[s1].valence_configuration:
+            for n2, l2 in slako.atoms[s2].valence_configuration:
                 for itype in slako_integral_types[l1 + l2]:
                     # 0 .., 13
                     ski = slako_integrals[l1 + l2 + itype]
                     if ski < 9:
-                        hs = skt12[:, [ski, ski + 10]]
+                        hs_raw = skt12[:, [ski, ski + 10]]
                     else:
                         # map to 0 .., 10
                         parity = (-1) ** (angular_number[l1] + angular_number[l2])
                         ski_ = slako_integrals[l2 + l1 + itype]
-                        hs = parity * skt21[:, [ski_, ski_ + 10]]
+                        hs_raw = parity * skt21[:, [ski_, ski_ + 10]]
                     # append
                     # index : {
-                    # [[h(r1) ... s(r1)]
-                    #         ...
-                    # [h(rN)  ... s(rN)]]
+                    # [[h(r1), s(r1)]
+                    #        ,
+                    #  [h(rN) , s(rN)]]
                     # }
-                    cols[ski] = hs
+                    hsi[ski] = hs_raw
 
-        n, m = len(slako.R), len(cols)
+        n, m = len(slako.R), len(hsi)
         table = np.empty((n, 2 * m))
-        self.skindices = list(sorted(cols.keys()))
-        for i, ski in enumerate(self.skindices):
-            table[:, i] = cols[ski][:, 0]  # Hamiltonian
-            table[:, i + m] = cols[ski][:, 1]  # Overlap
+        self.ski = list(sorted(hsi.keys()))
+        for i, ski in enumerate(self.ski):
+            table[:, i] = hsi[ski][:, 0]  # Hamiltonian
+            table[:, i + m] = hsi[ski][:, 1]  # Overlap
 
         self.table = SlaterKosterSpline(slako.R, table)
         self.cutoff = self.table.get_cutoff()
@@ -117,10 +119,10 @@ class SlaterKosterPair:
 
     def __call__(self, rho, dist) -> Any:
         h, s, dh, ds = self.table(dist)
-        self.h[self.skindices] = h
-        self.s[self.skindices] = s
-        self.dh[self.skindices] = np.outer(dh, rho)
-        self.ds[self.skindices] = np.outer(ds, rho)
+        self.h[self.ski] = h
+        self.s[self.ski] = s
+        self.dh[self.ski] = np.outer(dh, rho)
+        self.ds[self.ski] = np.outer(ds, rho)
         return self.tranform(rho, dist, self.h, self.s, self.dh, self.ds)
 
 
