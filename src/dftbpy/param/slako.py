@@ -185,8 +185,8 @@ class SlaterKosterTable:
                 K2_j = self.funcs[s2]["K_j"]
 
                 selected = select_integrals(
-                    self.atoms[s1].get_valence_states(),
-                    self.atoms[s2].get_valence_states(),
+                    self.atoms[s1].valence_configuration,
+                    self.atoms[s2].valence_configuration,
                 )
 
                 skt = self.tables[(s1, s2)]

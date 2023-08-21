@@ -160,7 +160,7 @@ class SKWrite:
     def write_energy_line(self):
         fields = extended_energy_fields if self.is_extended else energy_fields
         values = dict.fromkeys(fields, 0.0)
-        nl_j = self.a1.get_valence_states()
+        nl_j = self.a1.valence_configuration
         for nl in nl_j:
             j = self.a1.index(nl)
             l = angular_name[nl[1]]

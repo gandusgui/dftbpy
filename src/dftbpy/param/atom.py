@@ -1,3 +1,4 @@
+from collections import namedtuple
 from math import log, pi, sqrt
 
 import numpy as np
@@ -123,9 +124,26 @@ class Atom:
         self.v = np.zeros(self.N)  # potential
         self.n = np.zeros(self.N)  # electron density
 
+        self.valence_configuration = list(
+            map(lambda nlf: nlf[:2], valence_configurations[self.symbol])
+        )
+
     @property
     def nlfe_j(self):
         yield from zip(self.n_j, self.l_j, self.f_j, self.e_j)
+
+    def get_valence_states(self):
+        """Get valence states."""
+        valence_states = {}
+        state = namedtuple("state", ["f", "e", "no"])
+        for nl in self.valence_configuration:
+            j = self.index(nl)
+            valence_states[nl] = state(
+                self.f_j[j],  # occupation
+                self.e_j[j],  # energy
+                2 * self.l_j[j] + 1,  # number of orbitals
+            )
+        return valence_states
 
     def add(self, n, l, df=+1, e=None):
         """Add (df=+1) or remove (df=-1) electron."""
@@ -152,6 +170,8 @@ class Atom:
         self.f_j.append(df)
         if e is None:
             self.e_j.append(-1.0 * self.Z**2 / n**2)
+        # update valence configuration with added nl state
+        self.valence_configuration.append(str(n) + angular_number[l])
 
     def guess_radials(self):
         r = self.rgd.r_g
@@ -316,28 +336,13 @@ class Atom:
     def calculate_number_of_electrons(self):
         return self.rgd.integrate(self.n)
 
-    # @property
-    # def valence_configuration(self):
-    #     self.valence_config = {}
-    #     self.n_valence_els = 0
-    #     self.n_valence_orbs = 0
-    #     for nl in map(lambda nlf: nlf[:2],valence_configurations[self.symbol]):
-    #         j = self.index(nl)
-    #         self.n_valence_els += self.f_j[j]
-    #         self.n_valence_orbs += 2*self.l_j[j]+1
-    #         self.valence_config[nl] = self.e_j[j], self.f_j[j]
-
-    def get_valence_states(self):
-        """Return list of nl valence states."""
-        return [nlf[:2] for nlf in valence_configurations[self.symbol]]
-
     def get_number_of_valence_electrons(self):
         """Return number of valence orbitals."""
-        return sum(self.f_j[self.index(nl)] for nl in self.get_valence_states())
+        return sum(s.f for s in self.get_valence_states().values())
 
     def get_number_of_valence_orbitals(self):
         """Return number of valence orbitals."""
-        return sum(2 * self.l_j[self.index(nl)] + 1 for nl in self.get_valence_states())
+        return sum(s.no for s in self.get_valence_states().values())
 
     def get_cutoff(self):
         gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)
