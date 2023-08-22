@@ -1,11 +1,15 @@
-from collections import namedtuple
 from math import log, pi, sqrt
 
 import numpy as np
-from ase.data import chemical_symbols
 
-from dftbpy.param.configs import angular_number, configurations, valence_configurations
+from dftbpy.param.configs import (
+    atomic_numbers,
+    configurations,
+    convert_configuration,
+    valence_configurations,
+)
 from dftbpy.param.hartree import hartree
+from dftbpy.param.spline import Spline
 from dftbpy.param.xcf import LDA
 
 
@@ -97,14 +101,17 @@ class Grid:
 
 
 class Atom:
-    def __init__(self, symbol, gpernode=150) -> None:
+    def __init__(self, symbol, gpernode=150, configuration=None) -> None:
         self.symbol = symbol
-        self.Z, nlfe_j = configurations[symbol]
+        self.Z = atomic_numbers[symbol]
+        if configuration is None:
+            configuration = configurations[symbol]
 
-        self.n_j = [n for n, l, f, e in nlfe_j]
-        self.l_j = [l for n, l, f, e in nlfe_j]
-        self.f_j = [f for n, l, f, e in nlfe_j]
-        self.e_j = [e for n, l, f, e in nlfe_j]
+        nlf_j = [convert_configuration(nlf) for nlf in configuration]
+        self.n_j = [n for n, l, f in nlf_j]
+        self.l_j = [l for n, l, f in nlf_j]
+        self.f_j = [f for n, l, f in nlf_j]
+        self.e_j = list(configuration.values())
         self.nel = self.Z
 
         # xc
@@ -124,54 +131,29 @@ class Atom:
         self.v = np.zeros(self.N)  # potential
         self.n = np.zeros(self.N)  # electron density
 
-        self.valence_configuration = list(
-            map(lambda nlf: nlf[:2], valence_configurations[self.symbol])
-        )
+        self.ref_configuration = configurations[self.symbol]
+        self.ref_valence_configuration = valence_configurations[self.symbol]
 
     @property
     def nlfe_j(self):
         yield from zip(self.n_j, self.l_j, self.f_j, self.e_j)
 
-    def get_valence_states(self):
-        """Get valence states."""
-        valence_states = {}
-        state = namedtuple("state", ["f", "e", "no"])
-        for nl in self.valence_configuration:
-            j = self.index(nl)
-            valence_states[nl] = state(
-                self.f_j[j],  # occupation
-                self.e_j[j],  # energy
-                2 * self.l_j[j] + 1,  # number of orbitals
-            )
-        return valence_states
+    @property
+    def configuration(self):
+        """Dictionary of configuration."""
+        return {convert_configuration(n, l, f): e for n, l, f, e in self.nlfe_j}
 
-    def add(self, n, l, df=+1, e=None):
-        """Add (df=+1) or remove (df=-1) electron."""
-        self.nel += df
-        j = 0
-        for n_, l_, f_, e_ in self.nlfe_j:
-            if n_ == n and l_ == l:
-                break
-            j += 1
-        if j < len(self.n_j):
-            self.f_j[j] = self.f_j[j] + df
-            if e is not None:
-                self.e_j[j] = e
-            else:
-                # read e_ from neighbor symbol.
-                neighbor = chemical_symbols[self.nel]
-                for n_, l_, f_, e_ in configurations[neighbor][1]:
-                    if n_ == n and l_ == l:
-                        self.e_j[j] = e_
-                        break
-            return
-        self.n_j.append(n)
-        self.l_j.append(l)
-        self.f_j.append(df)
-        if e is None:
-            self.e_j.append(-1.0 * self.Z**2 / n**2)
-        # update valence configuration with added nl state
-        self.valence_configuration.append(str(n) + angular_number[l])
+    @property
+    def valence_configuration(self):
+        """Dictionary of valence configuration."""
+        ref_valence_conf = list(nlf[:2] for nlf in self.ref_valence_configuration)
+        ref_conf = list(nlf[:2] for nlf in self.ref_configuration)
+        valence_configuration = {}
+        for nlf, e in self.configuration.items():
+            nl = nlf[:2]
+            if nl in ref_valence_conf or nl not in ref_conf:
+                valence_configuration[nlf] = e
+        return valence_configuration
 
     def guess_radials(self):
         r = self.rgd.r_g
@@ -336,25 +318,20 @@ class Atom:
     def calculate_number_of_electrons(self):
         return self.rgd.integrate(self.n)
 
-    def get_number_of_valence_electrons(self):
-        """Return number of valence orbitals."""
-        return sum(s.f for s in self.get_valence_states().values())
-
-    def get_number_of_valence_orbitals(self):
-        """Return number of valence orbitals."""
-        return sum(s.no for s in self.get_valence_states().values())
-
     def get_cutoff(self):
         gcut = max(self.rgd.get_cutoff(R) for R in self.R_j)
         return self.rgd.r_g[gcut]
 
-    def index(self, nl):
+    def index(self, nlf):
         """Return index of nl state."""
-        n, l = int(nl[0]), angular_number[nl[1]]
+        n, l, f = convert_configuration(nlf)
         for j, (n_, l_) in enumerate(zip(self.n_j, self.l_j)):
             if n_ == n and l_ == l:
                 return j
         raise RuntimeError("State not found.")
+
+    def spline(self, x):
+        return Spline(self.rgd.r_g, x)
 
 
 def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):

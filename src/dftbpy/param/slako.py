@@ -4,24 +4,22 @@ from math import acos, cos, sin, sqrt, tan
 import numpy as np
 from ase import Atom
 
-from dftbpy.param.spline import Spline
-
 slako_integrals = ["dds", "ddp", "ddd", "pds", "pdp", "pps", "ppp", "sds", "sps", "sss"]
 
 
-def select_integrals(nl1_j, nl2_j):
+def select_integrals(nlf1_j, nlf2_j):
     selected = []
     for ski, (l1, l2, itype) in enumerate(slako_integrals):
         s1_j = []
-        for nl in nl1_j:
-            if l1 == nl[1]:
-                s1_j.append(nl)
+        for nlf in nlf1_j:
+            if l1 == nlf[1]:
+                s1_j.append(nlf)
         if len(s1_j) == 0:
             continue
         s2_j = []
-        for nl in nl2_j:
-            if l2 == nl[1]:
-                s2_j.append(nl)
+        for nlf in nlf2_j:
+            if l2 == nlf[1]:
+                s2_j.append(nlf)
         if len(s2_j) == 0:
             continue
         for nl1 in s1_j:
@@ -145,12 +143,11 @@ class SlaterKosterTable:
         funcs = {}
         for s in (s1, s2):
             atom = self.atoms[s]
-            r = atom.rgd.r_g
             funcs[s] = {
-                "v": Spline(r, atom.v),
-                "R_j": [Spline(r, R) for R in atom.R_j],
+                "v": atom.spline(atom.v),
+                "R_j": [atom.spline(R) for R in atom.R_j],
                 "K_j": [
-                    Spline(r, atom.rgd.kin2(R, l)) for R, l in zip(atom.R_j, atom.l_j)
+                    atom.spline(atom.rgd.kin2(R, l)) for R, l in zip(atom.R_j, atom.l_j)
                 ],
             }
         self.funcs = funcs
@@ -191,9 +188,9 @@ class SlaterKosterTable:
 
                 skt = self.tables[(s1, s2)]
 
-                for ski, nl1, nl2 in selected:
-                    j1 = self.atoms[s1].index(nl1)
-                    j2 = self.atoms[s2].index(nl2)
+                for ski, nlf1, nlf2 in selected:
+                    j1 = self.atoms[s1].index(nlf1)
+                    j2 = self.atoms[s2].index(nlf2)
                     R1 = R1_j[j1](r1)
                     R2 = R2_j[j2](r2)
                     K2 = K2_j[j2](r2)

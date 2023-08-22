@@ -68,17 +68,21 @@ class SlaterKosterSpline(CubicSpline):
 class SlaterKosterParam:
     """Slater-Koster table for a given atom pair."""
 
-    def __init__(self, slako, transpose=False) -> None:
-        s1, s2 = next(iter(slako.pairs))
-        if transpose:
-            s2, s1 = s1, s2
+    def __init__(self, slako, pair) -> None:
+        s1, s2 = pair
         skt12 = slako.tables[s1, s2]
         skt21 = slako.tables[s2, s1]
 
         # dict of sk integrals
+        valence = {
+            s1: slako.atoms[s1].valence_configuration,
+            s2: slako.atoms[s2].valence_configuration,
+        }
         hsi = {}
-        for n1, l1 in slako.atoms[s1].valence_configuration:
-            for n2, l2 in slako.atoms[s2].valence_configuration:
+        for nlf1 in valence[s1]:
+            l1 = nlf1[1]
+            for nlf2 in valence[s2]:
+                l2 = nlf2[1]
                 for itype in slako_integral_types[l1 + l2]:
                     # 0 .., 13
                     ski = slako_integrals[l1 + l2 + itype]
@@ -113,8 +117,8 @@ class SlaterKosterParam:
         self.dh = np.zeros((14, 3))
         self.ds = np.zeros((14, 3))
 
-        no1 = slako.atoms[s1].get_number_of_valence_orbitals()
-        no2 = slako.atoms[s2].get_number_of_valence_orbitals()
+        no1 = sum(2 * angular_number[nlf[1]] + 1 for nlf in valence[s1])
+        no2 = sum(2 * angular_number[nlf[1]] + 1 for nlf in valence[s2])
         self.tranform = SlaterKosterTransform(no1, no2)
 
     def __call__(self, rho, dist) -> Any:

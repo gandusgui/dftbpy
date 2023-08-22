@@ -2,6 +2,7 @@ import numpy as np
 from ase.neighborlist import first_neighbors, primitive_neighbor_list
 from ase.units import Bohr
 
+from dftbpy.param.configs import angular_number
 from dftbpy.slako import SlaterKosterParam
 
 
@@ -23,7 +24,9 @@ def setupproperty(name, doc):
 class Setup:
     """Setup for an atom or element."""
 
-    def __init__(self, symbol=None, states=None, index=None, setups=None) -> None:
+    def __init__(
+        self, symbol=None, configuration=None, index=None, setups=None
+    ) -> None:
         self.data = d = {}
 
         if setups is None:
@@ -32,11 +35,12 @@ class Setup:
             d["configuration"] = conf = []  # quantum numbers
             no = 0
             nel = 0
-            for nl, state in states.items():
-                no += state.no
-                nel += state.f
-                eners.extend(state.no * [state.e])
-                conf.append(nl)
+            for nlf, e in configuration.items():
+                no_ = 2 * angular_number[nlf[1]] + 1
+                no += no_
+                nel += int(nlf[2:])
+                eners.extend(no_ * [e])
+                conf.append(nlf[:2])
             d["no"] = no
             d["nel"] = nel
             d["energies"] = np.array(eners)
@@ -89,13 +93,15 @@ class Setups:
         self.elements = {}  # Unique elements
         self.cutoffs = {}  # Cutoff distances pairs
         for (s1, s2), skt in slakos.items():  # skt = SlaterKosterTable
-            self.slakos[s1, s2] = slako12 = SlaterKosterParam(skt)
-            self.slakos[s2, s1] = slako21 = SlaterKosterParam(skt, transpose=True)
+            self.slakos[s1, s2] = slako12 = SlaterKosterParam(skt, (s1, s2))
+            self.slakos[s2, s1] = slako21 = SlaterKosterParam(skt, (s2, s1))
 
             for symbol in (s1, s2):
                 if symbol not in self.elements:
-                    states = skt.atoms[symbol].get_valence_states()
-                    self.elements[symbol] = Setup(symbol=symbol, states=states)
+                    self.elements[symbol] = Setup(
+                        symbol=symbol,
+                        configuration=skt.atoms[symbol].valence_configuration,
+                    )
 
             self.cutoffs[s1, s2] = slako12.cutoff
             self.cutoffs[s2, s1] = slako21.cutoff
