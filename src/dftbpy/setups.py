@@ -32,7 +32,7 @@ class Setup:
         if setups is None:
             eners = []  # energies
             d["symbol"] = symbol
-            d["configuration"] = conf = []  # quantum numbers
+            # d["configuration"] = conf = []  # quantum numbers
             no = 0
             nel = 0
             for nlf, e in configuration.items():
@@ -40,7 +40,7 @@ class Setup:
                 no += no_
                 nel += int(nlf[2:])
                 eners.extend(no_ * [e])
-                conf.append(nlf[:2])
+                # conf.append(nlf[:2])
             d["no"] = no
             d["nel"] = nel
             d["energies"] = np.array(eners)
@@ -74,7 +74,7 @@ class Setup:
             self.data[name] = value
 
     symbol = setupproperty("symbol", "Chemical symbol")
-    configuration = setupproperty("configuration", "Valence state quantum numbers")
+    # configuration = setupproperty("configuration", "Valence state quantum numbers")
     no = setupproperty("no", "Number of orbitals")
     nel = setupproperty("nel", "Number of electrons")
     energies = setupproperty("energies", "Orbital energies")

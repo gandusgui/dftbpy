@@ -100,6 +100,15 @@ class Grid:
         return gcut
 
 
+# Helpers
+def take_nl(nlf):
+    return nlf[:2]
+
+
+def compress_repr(conf):
+    return list(map(take_nl, conf))
+
+
 class Atom:
     def __init__(self, symbol, gpernode=150, configuration=None) -> None:
         self.symbol = symbol
@@ -112,7 +121,6 @@ class Atom:
         self.l_j = [l for n, l, f in nlf_j]
         self.f_j = [f for n, l, f in nlf_j]
         self.e_j = list(configuration.values())
-        self.nel = self.Z
 
         # xc
         self.xc = LDA()
@@ -131,8 +139,14 @@ class Atom:
         self.v = np.zeros(self.N)  # potential
         self.n = np.zeros(self.N)  # electron density
 
-        self.ref_configuration = configurations[self.symbol]
-        self.ref_valence_configuration = valence_configurations[self.symbol]
+        self.reference = {
+            "configuration": configurations[self.symbol],
+            "valence_configuration": valence_configurations[self.symbol],
+        }
+
+    @property
+    def charge(self):
+        return self.Z - sum(self.f_j)
 
     @property
     def nlfe_j(self):
@@ -140,19 +154,25 @@ class Atom:
 
     @property
     def configuration(self):
-        """Dictionary of configuration."""
+        """Dictionary of {nlf:e} configuration."""
         return {convert_configuration(n, l, f): e for n, l, f, e in self.nlfe_j}
 
     @property
     def valence_configuration(self):
-        """Dictionary of valence configuration."""
-        ref_valence_conf = list(nlf[:2] for nlf in self.ref_valence_configuration)
-        ref_conf = list(nlf[:2] for nlf in self.ref_configuration)
+        """Dictionary of {nlf:e} valence configuration."""
+        ref_nl_conf = compress_repr(self.reference["configuration"])
+        ref_nl_valence = compress_repr(self.reference["valence_configuration"])
+
         valence_configuration = {}
         for nlf, e in self.configuration.items():
-            nl = nlf[:2]
-            if nl in ref_valence_conf or nl not in ref_conf:
+            nl = take_nl(nlf)
+            # add configuration to valence configuration
+            # if present in reference valence configuration
+            # (also with a different occupation)
+            # or not present in original configuration
+            if nl in ref_nl_valence or nl not in ref_nl_conf:
                 valence_configuration[nlf] = e
+
         return valence_configuration
 
     def guess_radials(self):
@@ -215,7 +235,7 @@ class Atom:
             self.e_j[j] = e
             u *= 1.0 / sqrt(np.dot(np.where(abs(u) < 1e-160, 0, u) ** 2, dr))
 
-    def run(self):
+    def run(self, nitermax=117, qOK=log(1e-10)):
         # grid
         r = self.rgd.r_g
         dr = self.rgd.dr_g
@@ -228,8 +248,8 @@ class Atom:
 
         # mix
         niter = 0
-        nitermax = 117
-        qOK = log(1e-10)
+        # nitermax = 117
+        # qOK = log(1e-10)
         mix = 0.4
 
         vrold = None
@@ -259,7 +279,11 @@ class Atom:
                 break
             niter += 1
             if niter > nitermax:
-                raise RuntimeError("Maximum number of iterations exceeded!")
+                raise RuntimeError(
+                    f"""
+                    Maximum number of iterations exceeded!
+                    Error is {q} while tolerance is {qOK}."""
+                )
 
         self.e_j = np.array(self.e_j)
         # Energy contributions
