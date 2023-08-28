@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def tri2full(H_nn, UL="U", map=np.conj):
+def tri2full(A, UL="U", map=np.conj):
     """Fill in values of hermitian or symmetric matrix.
 
     Fill values in lower or upper triangle of H_nn based on the opposite
@@ -22,10 +22,10 @@ def tri2full(H_nn, UL="U", map=np.conj):
       tri2full(H_nn, map=antihermitian)
 
     """
-    N, tmp = H_nn.shape
+    N, tmp = A.shape
     assert N == tmp, "Matrix must be square"
     if UL != "L":
-        H_nn = H_nn.T
+        A = A.T
 
     for n in range(N - 1):
-        map(H_nn[n + 1 :, n], H_nn[n, n + 1 :])
+        map(A[n + 1 :, n], A[n, n + 1 :])
