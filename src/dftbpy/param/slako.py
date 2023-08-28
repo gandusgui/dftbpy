@@ -169,13 +169,10 @@ class SlaterKosterTable:
             r2 = np.sqrt(d**2 + (Rz - z) ** 2)
             # Angular integration
             P = g(np.arccos(z / r1), np.arccos((z - Rz) / r2))
-            # Total potential v = v1 + v2 or v = 2 * v1
-            # TODO : subtract the confinement potential
-            V = (3 - len(self.pairs)) * sum(
-                func["v"](ri) for func, ri in zip(self.funcs.values(), (r1, r2))
-            )
 
             for s1, s2 in self.pairs:
+                # TODO : subtract the confinement potential
+                V = self.funcs[s1]["v"](r1) + self.funcs[s2]["v"](r2)
                 skt = self.tables[(s1, s2)]
                 R1_j = self.funcs[s1]["R_j"]
                 R2_j = self.funcs[s2]["R_j"]
