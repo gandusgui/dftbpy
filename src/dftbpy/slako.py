@@ -86,10 +86,10 @@ class SlaterKosterParam:
                 for itype in slako_integral_types[l1 + l2]:
                     # 0 .., 13
                     ski = slako_integrals[l1 + l2 + itype]
-                    if ski < 9:
+                    if ski <= 9:
                         hs_raw = skt12[:, [ski, ski + 10]]
                     else:
-                        # map to 0 .., 10
+                        # map to 0 .., 9
                         parity = (-1) ** (angular_number[l1] + angular_number[l2])
                         ski_ = slako_integrals[l2 + l1 + itype]
                         hs_raw = parity * skt21[:, [ski_, ski_ + 10]]
