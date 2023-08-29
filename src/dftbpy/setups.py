@@ -1,7 +1,9 @@
 import numpy as np
+from ase.atoms import Atoms
 from ase.neighborlist import first_neighbors, primitive_neighbor_list
 from ase.units import Bohr
 
+from dftbpy.param import SlaterKosterTable
 from dftbpy.param.configs import angular_number
 from dftbpy.slako import SlaterKosterParam
 
@@ -24,23 +26,20 @@ def setupproperty(name, doc):
 class Setup:
     """Setup for an atom or element."""
 
-    def __init__(
-        self, symbol=None, configuration=None, index=None, setups=None
-    ) -> None:
+    def __init__(self, /, atom=None, index=None, setups=None) -> None:
         self.data = d = {}
 
         if setups is None:
             eners = []  # energies
-            d["symbol"] = symbol
-            # d["configuration"] = conf = []  # quantum numbers
+            d["symbol"] = atom.symbol
+            d["U"] = getattr(atom, "U", 0.0)  # backward compatibility
             no = 0
             nel = 0
-            for nlf, e in configuration.items():
+            for nlf, e in atom.valence_configuration.items():
                 no_ = 2 * angular_number[nlf[1]] + 1
                 no += no_
                 nel += int(nlf[2:])
                 eners.extend(no_ * [e])
-                # conf.append(nlf[:2])
             d["no"] = no
             d["nel"] = nel
             d["energies"] = np.array(eners)
@@ -56,9 +55,9 @@ class Setup:
         setups = self.setups
         symbol = setups.symbols[self.index]
 
-        if name == "orbital_indices":
+        if name == "orbitals_slice":
             fo = setups.first_orbitals
-            return setups.orbital_indices[fo[self.index] : fo[self.index + 1]]
+            return slice(fo[self.index], fo[self.index + 1])
 
         if name == "neighbors":
             return (
@@ -77,15 +76,16 @@ class Setup:
     # configuration = setupproperty("configuration", "Valence state quantum numbers")
     no = setupproperty("no", "Number of orbitals")
     nel = setupproperty("nel", "Number of electrons")
+    U = setupproperty("U", "Hubbard parameter")
     energies = setupproperty("energies", "Orbital energies")
-    orbital_indices = setupproperty("orbital_indices", "Orbital indices")
+    orbitals_slice = setupproperty("orbitals_slice", "Orbital indices")
     neighbors = setupproperty("neighbors", "Neighbors")
 
 
 class Setups:
     """Setups for a system of atoms."""
 
-    def __init__(self, atoms, slakos) -> None:
+    def __init__(self, atoms: Atoms, slakos: dict[SlaterKosterTable]) -> None:
         self.symbols = atoms.symbols
         self.atoms = atoms
 
@@ -98,10 +98,7 @@ class Setups:
 
             for symbol in (s1, s2):
                 if symbol not in self.elements:
-                    self.elements[symbol] = Setup(
-                        symbol=symbol,
-                        configuration=skt.atoms[symbol].valence_configuration,
-                    )
+                    self.elements[symbol] = Setup(atom=skt.atoms[symbol])
 
             self.cutoffs[s1, s2] = slako12.cutoff
             self.cutoffs[s2, s1] = slako21.cutoff
@@ -114,7 +111,6 @@ class Setups:
             self.nel += self.elements[s].nel
             self.no += self.elements[s].no
             self.first_orbitals[index + 1] = self.no
-        self.orbital_indices = np.arange(self.no)
 
         self.nl = NeighborList(cutoffs=self.cutoffs)
         self.nl.update(self.atoms)
@@ -131,10 +127,10 @@ class Setups:
     def __len__(self):
         return len(self.atoms)
 
-    def __getitem__(self, a):
+    def __getitem__(self, a) -> Setup:
         return Setup(index=a, setups=self)
 
-    def __iter__(self):
+    def __iter__(self) -> iter:
         yield from (self[i] for i in range(len(self)))
 
 
