@@ -191,7 +191,7 @@ class Setup:
         if setups is None:
             eners = []  # energies
             d["symbol"] = atom.symbol
-            d["U"] = getattr(atom, "U", 0.0)  # backward compatibility
+            d["U"] = getattr(atom, "U", 0.3)  # backward compatibility
             no = 0
             nel = 0
             for nlf, e in atom.valence_configuration.items():

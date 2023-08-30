@@ -35,7 +35,7 @@ class ZeroWidth:
         homo = np.searchsorted(cumf, nel)  # sum(cumf <= nel)
         if homo == no:
             fermi_level = np.inf
-        extra = nel - cumf[homo]
+        extra = cumf[homo] - nel
         if extra > 0:
             assert extra <= 2.0
             f[homo] = extra
