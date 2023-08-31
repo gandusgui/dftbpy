@@ -3,22 +3,27 @@ from math import exp, log, pi, sqrt
 import numpy as np
 from scipy.special import erf
 
+from dftbpy.calculator import SetupConsistent, SimpleCalculator, arrayproperty
 from dftbpy.setups import Setups
 
 sqrtpi = sqrt(pi)
 
 
-class CoulombTable:
+class CoulombTable(SetupConsistent):
     def __init__(self, setups) -> None:
-        self.setups = setups
+        super().__init__(setups)
 
-        na = len(setups)
-        self.gamma = np.zeros((na, na))
-        self.dgamma = np.zeros((na, na, 3))
+        # arrays
+        atype = np.ndarray
+        self.metarrays = {
+            "g": (atype, dict(shape=("natoms", "natoms"), dtype=float)),
+            "dg": (atype, dict(shape=("natoms", "natoms", 3), dtype=float)),
+        }
 
-        self.nupdates = 0
+    gamma = arrayproperty("g", "Gamma")
+    dgamma = arrayproperty("dg", "Gamma derivative")
 
-    def update(self):
+    def calculate(self):
         """Construct the gamma matrix and its derivative."""
         # TODO
         # - add gamma cutoff
@@ -40,27 +45,30 @@ class CoulombTable:
                 self.dgamma[el1.index, el2.index] = dfval
                 self.dgamma[el2.index, el1.index] = -dfval
 
-        self.nupdates += 1
 
-
-class Electrostatic:
+class Electrostatic(SimpleCalculator):
     def __init__(self, setups: Setups) -> None:
-        self.setups = setups
-        self.interaction = CoulombTable(setups)
+        super().__init__(setups)
+        self.coulomb = CoulombTable(setups)
 
         # arrays
-        self.H = np.zeros((setups.no, setups.no))
-        self.vpot = np.zeros(len(setups))  # negative avg. electrostatic potential
-        self.F = np.zeros((len(setups), 3))
+        atype = np.ndarray
+        self.metarrays = {
+            "H": (atype, dict(shape=("no", "no"), dtype=float)),
+            "V": (atype, dict(shape=("natoms",), dtype=float)),
+            "F": (atype, dict(shape=("natoms", 3), dtype=float)),
+        }
 
-        self.nupdates = 0
+    H = arrayproperty("H", "Hamiltonian")
+    V = arrayproperty("V", "Potential due to charge fluctuations")
+    F = arrayproperty("F", "Forces")
 
-    def update(self, dq):
+    def calculate(self, dq):
         """Calculate Hamiltonian, it's derivative, energy and forces."""
-        gamma = self.interaction.gamma
-        dgamma = self.interaction.dgamma
+        gamma = self.coulomb.gamma
+        dgamma = self.coulomb.dgamma
 
-        vpot = self.vpot
+        vpot = self.V
         # forces
         F = self.F
         for el1 in self.setups:
@@ -88,4 +96,19 @@ class Electrostatic:
                 # lower-triangle
                 H[o2, o1] = h
 
-        self.nupdates += 1
+    def requires_calculation(self, dq):
+        # force calculation for now.
+        return True
+
+    def update(self, dq):
+        if self.coulomb.update():
+            self.set_arrays()
+
+        #
+        update = False
+        if self.requires_calculation(dq):
+            self.calculate(dq)
+            self.nupdates += 1  # up-to-date with setups
+            update = True
+
+        return update

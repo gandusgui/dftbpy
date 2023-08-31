@@ -5,10 +5,10 @@ import numpy as np
 
 
 def fermi_dirac(
-    eigs: np.ndarray, fermi_level: float, width: float
+    e: np.ndarray, fermi_level: float, width: float
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Fermi-Dirac distribution function"""
-    x = (eigs - fermi_level) / width
+    x = (e - fermi_level) / width
     x = np.clip(x, -100, 100)
     y = np.exp(x)
     z = y + 1.0
@@ -21,15 +21,15 @@ class ZeroWidth:
     def __init__(self) -> None:
         self.width = 0.0
 
-    def occupy(self, eigs, fermi_level):
-        f = np.zeros_like(eigs)
-        f[eigs < fermi_level] = 2.0
-        f[eigs == fermi_level] = 1.0
+    def occupy(self, e, fermi_level):
+        f = np.zeros_like(e)
+        f[e < fermi_level] = 2.0
+        f[e == fermi_level] = 1.0
         return f, 0.0
 
-    def calculate_fermi_level(self, eigs, nel):
+    def calculate_fermi_level(self, e, nel):
         """Occupy states."""
-        no = eigs.size
+        no = e.size
         f = np.full(no, 2.0)
         cumf = np.cumsum(f)
         homo = np.searchsorted(cumf, nel)  # sum(cumf <= nel)
@@ -39,9 +39,9 @@ class ZeroWidth:
         if extra > 0:
             assert extra <= 2.0
             f[homo] = extra
-            fermi_level = eigs[homo]
+            fermi_level = e[homo]
         else:
-            fermi_level = (eigs[homo + 1] + eigs[homo]) / 2
+            fermi_level = (e[homo + 1] + e[homo]) / 2
         return fermi_level
 
 
@@ -54,15 +54,15 @@ class Occupations(ZeroWidth):
         self.width = width
 
     @abstractmethod
-    def occupy(self, eigs, fermi_level):
+    def occupy(self, e, fermi_level):
         ...
 
-    def guess_fermi_level(self, eigs, nel):
+    def guess_fermi_level(self, e, nel):
         """Guess zero-width distribution."""
-        return super().calculate_fermi_level(eigs, nel)
+        return super().calculate_fermi_level(e, nel)
 
-    def calculate_fermi_level(self, eigs, nel):
-        fermi_level = self.guess_fermi_level(eigs, nel)
+    def calculate_fermi_level(self, e, nel):
+        fermi_level = self.guess_fermi_level(e, nel)
 
         if self.width == 0.0 or np.isinf(fermi_level):
             return fermi_level
@@ -70,7 +70,7 @@ class Occupations(ZeroWidth):
         x = fermi_level
 
         def func(x):
-            f, dfde = map(sum, self.occupy(eigs, x))
+            f, dfde = map(sum, self.occupy(e, x))
             df = f - nel
             return df, dfde
 
@@ -79,8 +79,8 @@ class Occupations(ZeroWidth):
 
 
 class FermiDirac(Occupations):
-    def occupy(self, eigs, fermi_level):
-        f, dfde = fermi_dirac(eigs, fermi_level, self.width)
+    def occupy(self, e, fermi_level):
+        f, dfde = fermi_dirac(e, fermi_level, self.width)
         f[:] *= 2.0
         dfde[:] *= 2.0
         return f, dfde

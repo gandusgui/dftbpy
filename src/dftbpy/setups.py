@@ -18,7 +18,7 @@ class NeighborList:
         self.sorted = True
         self.nupdates = 0
 
-    def update(self, atoms):
+    def update(self, atoms: Atoms):
         """Make sure the list is up to date."""
         pbc = atoms.pbc
         cell = atoms.cell
@@ -109,10 +109,7 @@ class NeighborList:
 class Setups:
     """Setups for a system of atoms."""
 
-    def __init__(self, atoms: Atoms, slakos: dict[SlaterKosterTable]) -> None:
-        self.symbols = atoms.symbols
-        self.atoms = atoms
-
+    def __init__(self, slakos: dict[SlaterKosterTable]) -> None:
         self.slakos = {}  # Slater-Koster pairs
         self.elements = {}  # Unique elements
         self.cutoffs = {}  # Cutoff distances pairs
@@ -127,23 +124,25 @@ class Setups:
             self.cutoffs[s1, s2] = slako12.cutoff
             self.cutoffs[s2, s1] = slako21.cutoff
 
-        self.orbitals_slices = []
-        self.nel = 0  # total number of electrons
-        self.no = 0  # total number of orbitals
-        for s in self.symbols:
-            el = self.elements[s]
-            self.orbitals_slices.append(slice(self.no, self.no + el.no))
-            self.nel += el.nel
-            self.no += el.no
-
         self.nl = NeighborList(cutoffs=self.cutoffs)
+        self.symbols = np.ndarray(0, "U1")
 
     @property
     def nupdates(self):
         return self.nl.nupdates
 
-    def update(self, atoms):
-        """Update neighbor list."""
+    def update(self, atoms: Atoms):
+        if self.nupdates == 0:
+            self.symbols = np.array(atoms.symbols, copy=True)
+            self.orbitals_slices = []
+            self.nel = 0  # total number of electrons
+            self.no = 0  # total number of orbitals
+            for s in self.symbols:
+                el = self.elements[s]
+                self.orbitals_slices.append(slice(self.no, self.no + el.no))
+                self.nel += el.nel
+                self.no += el.no
+
         return self.nl.update(atoms)
 
     def get_total_number_of_orbitals(self):
@@ -155,8 +154,12 @@ class Setups:
     def get_neighbors(self, a):
         return self.nl.get_neighbors(a)
 
+    @property
+    def natoms(self):
+        return len(self.symbols)
+
     def __len__(self):
-        return len(self.atoms)
+        return self.natoms
 
     def __getitem__(self, a):
         return Setup(index=a, setups=self)

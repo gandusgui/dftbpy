@@ -1,9 +1,9 @@
 from math import log, pi, sqrt
 
 import numpy as np
+from ase.data import atomic_numbers
 
 from dftbpy.param.configs import (
-    atomic_numbers,
     configurations,
     convert_configuration,
     valence_configurations,
