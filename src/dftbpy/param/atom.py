@@ -314,7 +314,7 @@ class Atom:
         v = self.v
         v[1:] = self.vr[1:] / r[1:]
         # Extrapolation with midpoint formula.
-        v = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
+        v[0] = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
 
     def calculate_kinetic_energy_density(self):
         """Calculate kinetic energy density."""
