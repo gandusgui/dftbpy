@@ -152,10 +152,12 @@ class SlaterKosterTable:
             }
         self.funcs = funcs
 
-    def run(self, R1, R2, N, nt=150, nr=50):
+    def run(self, N=50, nt=150, nr=50):
         rcut = max(atom.get_cutoff() for atom in self.atoms.values())
         rmin = 0.0
         # Atomic distances
+        R1 = 0
+        R2 = sum(atom.get_cutoff() for atom in self.atoms.values())
         self.R = np.linspace(R1, R2, N, endpoint=True)
         # Slater-Koster tables
         self.tables = {(s1, s2): np.zeros((N, 20)) for s1, s2 in self.pairs}
@@ -171,8 +173,12 @@ class SlaterKosterTable:
             P = g(np.arccos(z / r1), np.arccos((z - Rz) / r2))
 
             for s1, s2 in self.pairs:
-                # TODO : subtract the confinement potential
-                V = self.funcs[s1]["v"](r1) + self.funcs[s2]["v"](r2)
+                V = (
+                    self.funcs[s1]["v"](r1)
+                    - self.atoms[s1].vconf(r1)
+                    + self.funcs[s2]["v"](r2)
+                    - self.atoms[s2].vconf(r2)
+                )  # should be approx. to the true crystal potential
                 skt = self.tables[(s1, s2)]
                 R1_j = self.funcs[s1]["R_j"]
                 R2_j = self.funcs[s2]["R_j"]

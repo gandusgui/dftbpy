@@ -110,7 +110,9 @@ def compress_repr(conf):
 
 
 class Atom:
-    def __init__(self, symbol, gpernode=150, configuration=None) -> None:
+    def __init__(
+        self, symbol, configuration=None, gpernode=150, confinement={"mode": "none"}
+    ) -> None:
         self.symbol = symbol
         self.Z = atomic_numbers[symbol]
         if configuration is None:
@@ -130,6 +132,9 @@ class Atom:
         self.N = (maxnodes + 1) * gpernode
         self.beta = 0.4
         self.rgd = Grid(self.beta / self.N, 1.0 / self.N, self.N)
+
+        # confinement
+        self.vconf = ConfinementPotential(**confinement)
 
         # orbs
         self.nj = len(self.n_j)
@@ -200,40 +205,55 @@ class Atom:
         return n
 
     def solve_radials(self):
-        r = self.rgd.r_g
-        dr = self.rgd.dr_g
+        rgd = self.rgd
+        r = rgd.r_g
+        dr = rgd.dr_g
         vr = self.vr
 
         c2 = -((r / dr) ** 2)
-        c1 = -self.rgd.d2gdr2() * r**2
-
+        c1 = -rgd.d2gdr2() * r**2
         # solve for each quantum state separately
         for j, (n, l, e, u) in enumerate(zip(self.n_j, self.l_j, self.e_j, self.u_j)):
             nodes = n - l - 1  # analytically expected number of nodes
-            delta = -0.2 * e
-            nn, A = shoot(u, l, vr, e, r, dr, c1, c2)
-            # adjust eigenenergy until u has the correct number of nodes
-            while nn != nodes:
-                diff = np.sign(nn - nodes)
-                while diff == np.sign(nn - nodes):
-                    e -= diff * delta
-                    nn, A = shoot(u, l, vr, e, r, dr, c1, c2)
-                delta /= 2
 
-            # adjust eigenenergy until u is smooth at the turning point
-            de = 1.0
-            while abs(de) > 1e-9:
-                norm = np.dot(np.where(abs(u) < 1e-160, 0, u) ** 2, dr)
-                u *= 1.0 / sqrt(norm)
-                de = 0.5 * A / norm
-                x = abs(de / e)
-                if x > 0.1:
-                    de *= 0.1 / x
-                e -= de
-                assert e < 0.0
+            emax = vr[-1] / r[-1] - l * (l + 1) / (2 * r[-1] ** 2)
+            delta = self.de_j[j]
+            dir = ""
+            niter = 0
+            while True:
+                eprev = e
                 nn, A = shoot(u, l, vr, e, r, dr, c1, c2)
+                niter += 1
+
+                norm = rgd.integrate(u**2, -2) / (4 * pi)
+                u *= 1.0 / sqrt(norm)
+                if nn > nodes:
+                    # decrease energy
+                    if dir == "up":
+                        delta /= 2
+                    e -= delta
+                    dir = "down"
+                elif nn < nodes:
+                    # increase energy
+                    if dir == "down":
+                        delta /= 2
+                    e += delta
+                    dir = "up"
+                elif nn == nodes:
+                    de = -0.5 * A / norm
+                    if abs(de) < 1e-8:  # convergence
+                        break
+                    if de > 0:
+                        dir = "up"
+                    elif de < 0:
+                        dir = "down"
+                    e += de
+                if e > emax:
+                    e = 0.5 * (emax + eprev)
+
+                assert niter < 200, (n, l, e)
+
             self.e_j[j] = e
-            u *= 1.0 / sqrt(np.dot(np.where(abs(u) < 1e-160, 0, u) ** 2, dr))
 
     def run(self, nitermax=117, qOK=log(1e-10)):
         # grid
@@ -247,13 +267,15 @@ class Atom:
         n[:] = self.calculate_density()  # density
 
         # mix
-        niter = 0
+        self.niter = 0
         # nitermax = 117
         # qOK = log(1e-10)
         mix = 0.4
 
         vrold = None
         vHr = np.zeros(self.N)
+
+        self.de_j = -0.2 * np.array(self.e_j)
 
         while True:
             # harten potential
@@ -264,9 +286,9 @@ class Atom:
             self.xc.compute(n)
             vr[:] = vHr + self.xc.vxc * r
             # confinement
-            # TODO: implement confinement
+            vr[:] += self.vconf(r) * r
             # mix
-            if niter > 0:
+            if self.niter > 0:
                 vr[:] = (1.0 - mix) * vrold + mix * vr
             vrold = vr.copy()
             # solve radial equations and calculate new density
@@ -277,8 +299,8 @@ class Atom:
             q = log(np.sum((r * dn) ** 2))
             if q < qOK:
                 break
-            niter += 1
-            if niter > nitermax:
+            self.niter += 1
+            if self.niter > nitermax:
                 raise RuntimeError(
                     f"""
                     Maximum number of iterations exceeded!
@@ -299,7 +321,7 @@ class Atom:
         self.Enucl = -4 * pi * np.dot(n * r * self.Z, dr)
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
 
-        # Radial functions
+        # # Radial functions
         d1 = r[1]
         d2 = r[2]
         for l, R, u in zip(self.l_j, self.R_j, self.u_j):
@@ -356,6 +378,45 @@ class Atom:
 
     def spline(self, x):
         return Spline(self.rgd.r_g, x)
+
+
+class ConfinementPotential:
+    def __init__(self, *, mode, **kwargs):
+        """
+        Initialize the ConfinementPotential object.
+
+        :param mode: The mode of the confinement potential.
+        :param kwargs: Additional mode-specific arguments.
+        """
+        self.mode = mode
+        self.extra = kwargs
+        self.mode_functions = {
+            "none": self.none,
+            "quadratic": self.quadratic,
+        }
+
+        if mode in self.mode_functions:
+            self.f = self.mode_functions[mode]
+            if mode == "quadratic":
+                self.r0 = kwargs["r0"]
+        else:
+            raise NotImplementedError("Implement new confinements")
+
+    def none(self, r):
+        """Confinement potential function for the 'none' mode."""
+        return 0.0
+
+    def quadratic(self, r):
+        """Confinement potential function for the 'frauenheim' mode."""
+        return (r / self.r0) ** 2
+
+    def __call__(self, r):
+        """Calculate the confinement potential for a given radius."""
+        return self.f(r)
+
+    def __str__(self):
+        """Description for the current mode."""
+        return f"ConfinementPotential(mode='{self.mode}', kwargs={self.extra})"
 
 
 def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):
