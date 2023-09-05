@@ -5,12 +5,12 @@ from ase.units import Bohr
 
 from dftbpy.param import SlaterKosterTable
 from dftbpy.param.atom import Atom
-from dftbpy.param.configs import angular_number
+from dftbpy.param.configs import convert_configuration
 from dftbpy.slako import SlaterKosterParam
 
 
 class NeighborList:
-    def __init__(self, cutoffs, skin=0.3):
+    def __init__(self, cutoffs, skin=1e-6):
         self.cutoffs = cutoffs
         self.bothways = False
         self.skin = skin  # Any change in positions dp | dp < skin^2 triggers update
@@ -137,11 +137,13 @@ class Setups:
             self.orbitals_slices = []
             self.nel = 0  # total number of electrons
             self.no = 0  # total number of orbitals
+            self.E = 0  # sum of free atom energies.
             for s in self.symbols:
                 el = self.elements[s]
                 self.orbitals_slices.append(slice(self.no, self.no + el.no))
                 self.nel += el.nel
                 self.no += el.no
+                self.E += el.E
 
         return self.nl.update(atoms)
 
@@ -195,16 +197,20 @@ class Setup:
             eners = []  # energies
             d["symbol"] = atom.symbol
             d["U"] = getattr(atom, "U", 0.3)  # backward compatibility
-            no = 0
-            nel = 0
+            no_tot = 0
+            nel_tot = 0
+            Etot = 0
             for nlf, e in atom.valence_configuration.items():
-                no_ = 2 * angular_number[nlf[1]] + 1
-                no += no_
-                nel += int(nlf[2:])
-                eners.extend(no_ * [e])
-            d["no"] = no
-            d["nel"] = nel
+                n, l, f = convert_configuration(nlf)
+                no = 2 * l + 1
+                no_tot += no
+                nel_tot += int(nlf[2:])
+                eners.extend(no * [e])
+                Etot += e * f
+            d["no"] = no_tot
+            d["nel"] = nel_tot
             d["energies"] = np.array(eners)
+            d["E"] = Etot  # total free (valence) atom energy
 
         self.index = index
         self.setups = setups
@@ -237,6 +243,7 @@ class Setup:
     no = setupproperty("no", "Number of orbitals")
     nel = setupproperty("nel", "Number of electrons")
     U = setupproperty("U", "Hubbard parameter")
+    E = setupproperty("E", "Free atom energy")
     energies = setupproperty("energies", "Orbital energies")
     orbitals_slice = setupproperty("orbitals_slice", "Orbital indices")
     neighbors = setupproperty("neighbors", "Neighbors")
