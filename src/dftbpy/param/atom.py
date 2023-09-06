@@ -251,7 +251,7 @@ class Atom:
                 if e > emax:
                     e = 0.5 * (emax + eprev)
 
-                assert niter < 200, (n, l, e)
+                assert niter < 400, (n, l, e)
 
             self.e_j[j] = e
 
