@@ -148,6 +148,7 @@ class Atom:
             "configuration": configurations[self.symbol],
             "valence_configuration": valence_configurations[self.symbol],
         }
+        self.nupdates = 0
 
     @property
     def charge(self):
@@ -181,6 +182,8 @@ class Atom:
         return valence_configuration
 
     def guess_radials(self):
+        if self.nupdates > 0:
+            return
         r = self.rgd.r_g
         dr = self.rgd.dr_g
         # Initialize with Slater function:
@@ -337,6 +340,8 @@ class Atom:
         v[1:] = self.vr[1:] / r[1:]
         # Extrapolation with midpoint formula.
         v[0] = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
+
+        self.nupdates += 1
 
     def calculate_kinetic_energy_density(self):
         """Calculate kinetic energy density."""

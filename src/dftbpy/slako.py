@@ -73,7 +73,7 @@ class SlaterKosterParam:
         skt12 = slako.tables[s1, s2]
         skt21 = slako.tables[s2, s1]
 
-        # dict of sk integrals
+        # valence states
         valence = {
             s1: slako.atoms[s1].valence_configuration,
             s2: slako.atoms[s2].valence_configuration,
