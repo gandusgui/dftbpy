@@ -331,13 +331,13 @@ class Atom:
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
 
         # # Radial functions
-        d1 = r[1]
-        d2 = r[2]
+        r1 = r[1]
+        r2 = r[2]
         for l, R, u in zip(self.l_j, self.R_j, self.u_j):
             R[1:] = u[1:] / r[1:]
             if l == 0:
                 # Extrapolation with midpoint formula.
-                R[0] = 0.5 * (R[1] + R[2] + (R[1] - R[2]) * (d1 + d2) / (d2 - d1))
+                R[0] = 0.5 * (R[1] + R[2] + (R[1] - R[2]) * (r1 + r2) / (r2 - r1))
             else:
                 R[0] = 0
 
@@ -345,7 +345,7 @@ class Atom:
         v = self.v
         v[1:] = self.vr[1:] / r[1:]
         # Extrapolation with midpoint formula.
-        v[0] = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (d1 + d2) / (d2 - d1))
+        v[0] = 0.5 * (v[1] + v[2] + (v[1] - v[2]) * (r1 + r2) / (r2 - r1))
 
         self.nupdates += 1
 

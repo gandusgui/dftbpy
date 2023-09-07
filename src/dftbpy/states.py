@@ -16,11 +16,12 @@ class States(SetupConsistent):
         scc: bool = True,
         charge: int = 0,
         width: float = 0.0,
+        correction: str = "gauss",
     ) -> None:
         super().__init__(setups)
 
         self.pot = Potential(setups)
-        self.elecs = Electrostatic(setups)
+        self.elecs = Electrostatic(setups, correction)
 
         self.dist = FermiDirac(width=width)
         self.charge = charge

@@ -1,16 +1,72 @@
-from math import exp, log, pi, sqrt
-
+# from math import exp, log, pi, sqrt
 import numpy as np
-from scipy.special import erf
+from numpy import exp, log, pi, sqrt
+from scipy.special import erfc
 
 from dftbpy.calculator import SetupConsistent, SimpleCalculator, arrayproperty
 from dftbpy.setups import Setups
 
 sqrtpi = sqrt(pi)
+log2 = log(2)
+
+
+def gauss_correction(U1, U2, dist, rho):
+    FWHM1 = 1.328565 / U1
+    FWHM2 = 1.328565 / U2
+    const = 2 * sqrt(log2 / (FWHM1**2 + FWHM2**2))
+    ecr = -erfc(const * dist)
+    decr = 2.0 / sqrt(pi) * exp(-((const * dist) ** 2)) * const
+    value = ecr / dist
+    derivative = np.atleast_1d(decr / dist)[:, None] * rho
+    return value, np.squeeze(derivative)
+
+
+def slater_correction(U1, U2, dist, rho):
+    tau1 = 3.2 * U1
+    tau2 = 3.2 * U2
+    if abs(tau1 - tau2) < 1e-6:
+        src = 1.0 / (tau1 + tau2)
+        fac = tau1 * tau2 * src
+        avg = 1.6 * (fac + fac * fac * src)
+        fac = avg * dist
+        fac2 = fac * fac
+        efac = exp(-fac) / (48 * dist)
+        h = -(48 + 33 * fac + fac2 * (9 + fac)) * efac
+        value = h
+        derivative = (
+            np.atleast_1d(
+                h / dist + avg * h + (33 * avg + 18 * fac * avg + 3 * fac2 * avg) * efac
+            )[:, None]
+            * rho
+        )
+    else:
+        fi1 = 1.0 / (2 * (tau1**2 - tau2**2) ** 2)
+        fj1 = -(tau1**4) * tau2 * fi1
+        fi1 *= -(tau2**4) * tau1
+
+        fi2 = 1.0 / ((tau1**2 - tau2**2) ** 3)
+        fj2 = -(tau1**6 - 3 * tau1**4 * tau2**2) * fi2
+        fi2 *= tau2**6 - 3 * tau2**4 * tau1**2
+
+        expi = exp(-tau1 * dist)
+        expj = exp(-tau2 * dist)
+
+        value = expi * (fi1 + fi2 / dist) + expj * (fj1 + fj2 / dist)
+        derivative = (
+            np.atleast_1d(
+                expi * (tau1 * (fi1 + fi2 / dist) + fi2 / (dist**2))
+                + expj * (tau2 * (fj1 + fj2 / dist) + fj2 / (dist**2))
+            )[:, None]
+            * rho
+        )
+    return value, np.squeeze(derivative)
+
+
+corrections = {"gauss": gauss_correction, "slater": slater_correction}
 
 
 class CoulombTable(SetupConsistent):
-    def __init__(self, setups) -> None:
+    def __init__(self, setups: Setups, correction: str = "gauss") -> None:
         super().__init__(setups)
 
         # arrays
@@ -19,6 +75,7 @@ class CoulombTable(SetupConsistent):
             "g": (atype, dict(shape=("natoms", "natoms"), dtype=float)),
             "dg": (atype, dict(shape=("natoms", "natoms", 3), dtype=float)),
         }
+        self.corrtype = correction
 
     gamma = arrayproperty("g", "Gamma")
     dgamma = arrayproperty("dg", "Gamma derivative")
@@ -27,29 +84,21 @@ class CoulombTable(SetupConsistent):
         """Construct the gamma matrix and its derivative."""
         # TODO
         # - add gamma cutoff
-        # - reset if setups is updated
+        correction = corrections[self.corrtype]
         for el1 in self.setups:
             self.gamma[el1.index, el1.index] = el1.U
-            c1 = 1.329 / el1.U
-
             for el2, rho, dist in el1.neighbors:
-                # precomputation
-                c2 = 1.329 / el2.U
-                c12 = sqrt(4 * log(2) / (c1**2 + c2**2))
-                fval = erf(c12 * dist) / dist  # value
-                derf = 2 / sqrt(pi) * exp(-((c12 * dist) ** 2)) * c12
-                dfval = (derf - fval) * rho / dist**2  # derivative
-
-                self.gamma[el1.index, el2.index] = fval
-                self.gamma[el2.index, el1.index] = fval
-                self.dgamma[el1.index, el2.index] = dfval
-                self.dgamma[el2.index, el1.index] = -dfval
+                g, dg = correction(el1.U, el2.U, dist, rho)
+                self.gamma[el1.index, el2.index] = g
+                self.gamma[el2.index, el1.index] = g
+                self.dgamma[el1.index, el2.index] = dg
+                self.dgamma[el2.index, el1.index] = -dg
 
 
 class Electrostatic(SimpleCalculator):
-    def __init__(self, setups: Setups) -> None:
+    def __init__(self, setups: Setups, correction: str = "gauss") -> None:
         super().__init__(setups)
-        self.coulomb = CoulombTable(setups)
+        self.coulomb = CoulombTable(setups, correction)
 
         # arrays
         atype = np.ndarray
