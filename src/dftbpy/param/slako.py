@@ -154,9 +154,9 @@ class SlaterKosterTable:
 
     def run(self, N=50, nt=150, nr=50):
         rcut = max(atom.get_cutoff() for atom in self.atoms.values())
-        rmin = 0.0
+        rmin = 1e-7
         # Atomic distances
-        R1 = 0
+        R1 = 0.05
         R2 = sum(atom.get_cutoff() for atom in self.atoms.values())
         self.R = np.linspace(R1, R2, N, endpoint=True)
         # Slater-Koster tables

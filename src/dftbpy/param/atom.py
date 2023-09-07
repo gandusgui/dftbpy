@@ -2,6 +2,8 @@ from math import log, pi, sqrt
 
 import numpy as np
 from ase.data import atomic_numbers
+from ase.data import covalent_radii as covalent_radii_angstrom
+from ase.units import Bohr
 
 from dftbpy.param.configs import (
     configurations,
@@ -11,6 +13,10 @@ from dftbpy.param.configs import (
 from dftbpy.param.hartree import hartree
 from dftbpy.param.spline import Spline
 from dftbpy.param.xcf import LDA
+
+
+def covalent_radii(symbol):
+    return covalent_radii_angstrom[atomic_numbers[symbol]] / Bohr
 
 
 class Grid:
@@ -134,7 +140,7 @@ class Atom:
         self.rgd = Grid(self.beta / self.N, 1.0 / self.N, self.N)
 
         # confinement
-        self.vconf = ConfinementPotential(**confinement)
+        self.vconf = ConfinementPotential(**{**confinement, **dict(symbol=symbol)})
 
         # orbs
         self.nj = len(self.n_j)
@@ -403,7 +409,9 @@ class ConfinementPotential:
         if mode in self.mode_functions:
             self.f = self.mode_functions[mode]
             if mode == "quadratic":
-                self.r0 = kwargs["r0"]
+                symbol = kwargs.get("symbol", None)
+                r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
+                self.r0 = r0
         else:
             raise NotImplementedError("Implement new confinements")
 
@@ -485,4 +493,5 @@ def shoot(u, l, vr, e, r, dr, c1, c2, gmax=None):
     dudrminus = 0.5 * (u[gtp + 1] - u[gtp - 1]) / dr[gtp]
     A = (dudrplus - dudrminus) * utp
 
+    u[:] *= np.sign(u[1])
     return nodes, A
