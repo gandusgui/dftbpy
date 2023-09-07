@@ -73,12 +73,11 @@ class Electrostatic(SimpleCalculator):
         F = self.F
         for el1 in self.setups:
             # potential gamma * dq
-            nn = self.setups.get_neighbors(el1.index)[0]
-            vpot[el1.index] = gamma[el1.index, nn].dot(dq[nn])  # (-1) for correct sign
-            F[el1.index] = -dq[el1.index, None] * dq[nn].dot(dgamma[el1.index, nn])
+            vpot[el1.index] = gamma[el1.index, :].dot(dq[:])  # (-1) for correct sign
+            F[el1.index] = -dq[el1.index, None] * dq[:].dot(dgamma[el1.index, :])
 
         # energy
-        self.E = dq.dot(vpot)
+        self.E = 0.5 * dq.dot(vpot)
 
         # hamiltonian
         H = self.H
@@ -86,8 +85,9 @@ class Electrostatic(SimpleCalculator):
             o1 = el1.orbitals_slice
             # diagonal
             for e in range(o1.start, o1.stop):
-                H[e, e] = gamma[el1.index, el1.index]
-            # off-diagonal TODO: improve read locality (scan row-wise)
+                H[e, e] = vpot[el1.index]  # off-diag vanish when mult. by S
+            # off-diagonal
+            # TODO: improve read locality (scan row-wise)
             for el2, _, _ in el1.neighbors:
                 o2 = el2.orbitals_slice
                 h = 0.5 * (vpot[el1.index] + vpot[el2.index])

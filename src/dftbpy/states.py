@@ -71,6 +71,7 @@ class States(SetupConsistent):
         q = np.einsum("ij,ji->i", P, S, optimize=True)
         dq = self.dq
         for el1 in self.setups:
+            # change in number of electrons
             dq[el1.index] = q[el1.orbitals_slice].sum() - el1.nel
 
         self.f = f
@@ -126,10 +127,10 @@ class States(SetupConsistent):
         )
         orbF = -np.einsum("ij,jik->ik", self.P, dH, optimize=True) + np.einsum(
             "ij,jik->ik", Pe, pot.dS, optimize=True
-        )  # orbital forces
+        )  # orbital forces Trace[-rho dH + e rho dS]
         for el1 in self.setups:
             F[el1.index] = orbF[el1.orbitals_slice].sum(0)
-        if self.scc:
+        if self.scc:  # + 1/2 sum_IJ dgamma_IJ dQ_J
             F += elecs.F
 
         # energy
