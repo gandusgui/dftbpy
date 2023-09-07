@@ -5,7 +5,12 @@ from ase.units import Bohr
 
 from dftbpy.param import SlaterKosterTable
 from dftbpy.param.atom import Atom
-from dftbpy.param.configs import convert_configuration
+from dftbpy.param.configs import (
+    configurations,
+    convert_configuration,
+    hardnesses,
+    valence_configurations,
+)
 from dftbpy.slako import SlaterKosterParam
 
 
@@ -194,18 +199,26 @@ class Setup:
         self.data = d = {}
 
         if setups is None:
+            symbol = atom.symbol
+            configuration = configurations[symbol]
+            valence = {
+                nlf: configuration[nlf] for nlf in valence_configurations[symbol]
+            }
+            hardness = hardnesses[symbol]
             eners = []  # energies
-            d["symbol"] = atom.symbol
-            d["U"] = getattr(atom, "U", 0.3)  # backward compatibility
+            occps = []
+            d["symbol"] = symbol
+            d["U"] = hardness[max(hardness, key=lambda nlf: valence[nlf])]
             no_tot = 0
             nel_tot = 0
             Etot = 0
-            for nlf, e in atom.valence_configuration.items():
+            for nlf, e in valence.items():
                 n, l, f = convert_configuration(nlf)
                 no = 2 * l + 1
                 no_tot += no
                 nel_tot += int(nlf[2:])
                 eners.extend(no * [e])
+                occps.extend(no * [f / no])
                 Etot += e * f
             d["no"] = no_tot
             d["nel"] = nel_tot
