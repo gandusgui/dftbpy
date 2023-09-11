@@ -1,4 +1,7 @@
 from abc import abstractmethod
+from typing import List
+
+from ase.calculators.abc import GetPropertiesMixin
 
 from dftbpy.setups import Setups
 
@@ -15,10 +18,24 @@ def arrayproperty(name, doc):
     return property(getter, None, deleter, doc)
 
 
-class SimpleCalculator:
+all_properties = {
+    "charges": "dq",
+    "energies": "e",
+    "occupations": "f",
+    "energy": "E",
+    "forces": "F",
+    "hamiltonian": "H",
+    "overlap": "S",
+    "hamiltonian_derivative": "dH",
+    "overlap_derivative": "dS",
+}
+
+
+class SimpleCalculator(GetPropertiesMixin):
+    implemented_properties: List[str] = []
+
     def __init__(self, setups: Setups) -> None:
         self.setups = setups
-
         self.arrays = {}
         self.metarrays = {}  # arrays' metadata
         self.nupdates = 0
@@ -34,6 +51,12 @@ class SimpleCalculator:
     @abstractmethod
     def update(self, *args):
         ...
+
+    def get_property(self, name, atoms=None):
+        if name not in self.implemented_properties:
+            raise RuntimeError(f"Property {name} not implemented")
+
+        return getattr(self, all_properties[name])
 
     def set_arrays(self):
         for name, (atype, params) in self.metarrays.items():
@@ -54,6 +77,13 @@ class SimpleCalculator:
             atype.fill(data, 0.0)
 
             self.arrays[name] = data
+
+    def get_potential_energy(self, atoms=None, force_consistent=False):
+        if force_consistent:
+            name = "free_energy"
+        else:
+            name = "energy"
+        return self.get_property(name, atoms)
 
 
 class SetupConsistent(SimpleCalculator):
@@ -80,3 +110,12 @@ class SetupConsistent(SimpleCalculator):
 
         assert self.nupdates == self.setups.nupdates, "Self and Setups differ."
         return update
+
+    def get_property(self, name, atoms=None):
+        if self.setups.update(atoms) or self.nupdates == 0:
+            self.set_arrays()
+            self.calculate()
+            self.nupdates += 1
+
+        assert self.nupdates == self.setups.nupdates, "Self and Setups differ."
+        return super().get_property(name)

@@ -16,7 +16,7 @@ from dftbpy.slako import SlaterKosterParam
 
 class NeighborList:
     def __init__(self, cutoffs, skin=1e-6):
-        self.cutoffs = cutoffs
+        self.cutoffs = {pair: cutoff for pair, cutoff in cutoffs.items()}
         self.bothways = False
         self.skin = skin  # Any change in positions dp | dp < skin^2 triggers update
         self.self_interaction = False
@@ -27,7 +27,7 @@ class NeighborList:
         """Make sure the list is up to date."""
         pbc = atoms.pbc
         cell = atoms.cell
-        positions = atoms.positions / Bohr  # ase.Atoms conventions
+        positions = atoms.positions / Bohr  # conversion to Bohr
         numbers = atoms.numbers
 
         if self.nupdates == 0:
@@ -130,7 +130,7 @@ class Setups:
             self.cutoffs[s2, s1] = slako21.cutoff
 
         self.nl = NeighborList(cutoffs=self.cutoffs)
-        self.symbols = np.ndarray(0, "U1")
+        self.symbols = None
 
     @property
     def nupdates(self):
@@ -138,7 +138,7 @@ class Setups:
 
     def update(self, atoms: Atoms):
         if self.nupdates == 0:
-            self.symbols = np.array(atoms.symbols, copy=True)
+            self.symbols = atoms.symbols
             self.orbitals_slices = []
             self.nel = 0  # total number of electrons
             self.no = 0  # total number of orbitals
@@ -206,12 +206,12 @@ class Setup:
             }
             hardness = hardnesses[symbol]
             eners = []  # energies
-            occps = []
+            occps = []  # occupations
             d["symbol"] = symbol
             d["U"] = hardness[max(hardness, key=lambda nlf: valence[nlf])]
-            no_tot = 0
-            nel_tot = 0
-            Etot = 0
+            no_tot = 0  # total number of orbitals
+            nel_tot = 0  # total number of electrons
+            Etot = 0  # free atom energy
             for nlf, e in valence.items():
                 n, l, f = convert_configuration(nlf)
                 no = 2 * l + 1
@@ -223,7 +223,8 @@ class Setup:
             d["no"] = no_tot
             d["nel"] = nel_tot
             d["energies"] = np.array(eners)
-            d["E"] = Etot  # total free (valence) atom energy
+            d["occupations"] = np.array(occps)
+            d["E"] = Etot
 
         self.index = index
         self.setups = setups
@@ -258,5 +259,6 @@ class Setup:
     U = setupproperty("U", "Hubbard parameter")
     E = setupproperty("E", "Free atom energy")
     energies = setupproperty("energies", "Orbital energies")
+    occupations = setupproperty("occupations", "Orbital occupations")
     orbitals_slice = setupproperty("orbitals_slice", "Orbital indices")
     neighbors = setupproperty("neighbors", "Neighbors")

@@ -3,13 +3,15 @@ from warnings import warn
 import numpy as np
 from scipy.linalg import eigh
 
-from dftbpy.calculator import SetupConsistent, arrayproperty
+from dftbpy.calculator import SetupConsistent, all_properties, arrayproperty
 from dftbpy.electrostatic import Electrostatic
 from dftbpy.occupations import FermiDirac
 from dftbpy.potential import Potential
 
 
 class States(SetupConsistent):
+    implemented_properties = all_properties
+
     def __init__(
         self,
         setups,
@@ -30,17 +32,12 @@ class States(SetupConsistent):
         # arrays
         atype = np.ndarray
         self.metarrays = {
-            # "e": (atype, dict(shape=("no",), dtype=float)),
-            # "f": (atype, dict(shape=("no",), dtype=float)),
-            # "wfs": (atype, dict(shape=("no","no"), dtype=float)),
             "P": (atype, dict(shape=("no", "no"), dtype=float)),
-            # "Pe": (atype, dict(shape=("no", "no"), dtype=float)),
             "F": (atype, dict(shape=("natoms", 3), dtype=float)),
             "dq": (atype, dict(shape=("natoms",), dtype=float)),
         }
 
     P = arrayproperty("P", "Density Matrix")
-    # Pe = arrayproperty("Pe", "Energy-weighted density matrix")
     F = arrayproperty("F", "Forces")
     dq = arrayproperty("dq", "Mulliken charges")
 
@@ -138,3 +135,4 @@ class States(SetupConsistent):
         self.E = np.einsum("ij,ji", self.P, pot.H, optimize=True)  # Trace[rho H]
         if self.scc:
             self.E += elecs.E
+        self.E -= self.setups.E
