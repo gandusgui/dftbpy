@@ -1,4 +1,6 @@
+import pprint
 from math import log, pi, sqrt
+from pathlib import Path
 
 import numpy as np
 from ase.data import atomic_numbers
@@ -12,7 +14,7 @@ from dftbpy.param.configs import (
 )
 from dftbpy.param.hartree import hartree
 from dftbpy.param.spline import Spline
-from dftbpy.param.xcf import LDA
+from dftbpy.param.xcf import XC
 
 
 def covalent_radii(symbol):
@@ -117,7 +119,12 @@ def compress_repr(conf):
 
 class Atom:
     def __init__(
-        self, symbol, configuration=None, gpernode=150, confinement={"mode": "none"}
+        self,
+        symbol,
+        configuration=None,
+        xc="lda",
+        confinement={"mode": "none"},
+        gpernode=150,
     ) -> None:
         self.symbol = symbol
         self.Z = atomic_numbers[symbol]
@@ -130,14 +137,14 @@ class Atom:
         self.f_j = [f for n, l, f in nlf_j]
         self.e_j = list(configuration.values())
 
-        # xc
-        self.xc = LDA()
-
         # grid
         maxnodes = max([n - l - 1 for n, l in zip(self.n_j, self.l_j)])
         self.N = (maxnodes + 1) * gpernode
         self.beta = 0.4
         self.rgd = Grid(self.beta / self.N, 1.0 / self.N, self.N)
+
+        # xc
+        self.xc = XC(xc, self.rgd)
 
         # confinement
         self.vconf = ConfinementPotential(**{**confinement, **dict(symbol=symbol)})
@@ -149,6 +156,13 @@ class Atom:
         self.vr = np.zeros(self.N)  # potential times radius
         self.v = np.zeros(self.N)  # potential
         self.n = np.zeros(self.N)  # electron density
+
+        # energies
+        self.Exc = 0.0
+        self.Ecoul = 0.0
+        self.Ekin = 0.0
+        self.Enucl = 0.0
+        self.Etot = 0.0
 
         self.reference = {
             "configuration": configurations[self.symbol],
@@ -250,7 +264,7 @@ class Atom:
                     dir = "up"
                 elif nn == nodes:
                     de = -0.5 * A / norm
-                    if abs(de) < 1e-8:  # convergence
+                    if abs(de) < 1e-9:  # convergence
                         break
                     if de > 0:
                         dir = "up"
@@ -261,7 +275,6 @@ class Atom:
                     e = 0.5 * (emax + eprev)
 
                 assert niter < 400, (n, l, e)
-
             self.e_j[j] = e
 
     def run(self, nitermax=117, qOK=log(1e-10)):
@@ -326,7 +339,7 @@ class Atom:
         self.Ekin = Ekin - 4 * pi * np.dot(
             n * vr * r, dr
         )  # same as self.calculate_kinetic_energy_density() method
-        self.Exc = self.rgd.integrate(self.xc.exc)
+        self.Exc = self.rgd.integrate(self.xc.exc * self.n)
         self.Enucl = -4 * pi * np.dot(n * r * self.Z, dr)
         self.Etot = self.Exc + self.Ecoul + self.Ekin + self.Enucl
 
@@ -390,6 +403,34 @@ class Atom:
     def spline(self, x):
         return Spline(self.rgd.r_g, x)
 
+    def todict(self):
+        d = {}
+        d["symbol"] = self.symbol
+        d["configuration"] = self.configuration
+        d["vconf"] = vconf = {"mode": self.vconf.mode}
+        if vconf["mode"] != "none":
+            vconf["r0"] = self.vconf.r0
+        d["Exc"] = self.Exc
+        d["Ecoul"] = self.Ecoul
+        d["Ekin"] = self.Ekin
+        d["Enucl"] = self.Enucl
+        d["Etot"] = self.Etot
+        return d
+
+    def __repr__(self) -> str:
+        return pprint.PrettyPrinter(compact=True).pformat(self.todict())
+
+    def write(self, dir="."):
+        path = Path(dir)
+        name = self.symbol
+        if path.suffix:
+            # make sure .elm
+            name = path.name
+            path = path.parent
+        file = (path / name).with_suffix(".elm")
+        with open(file, "w") as fp:
+            pprint.PrettyPrinter(compact=True, stream=fp).pprint(self.todict())
+
 
 class ConfinementPotential:
     def __init__(self, *, mode, **kwargs):
@@ -403,15 +444,24 @@ class ConfinementPotential:
         self.extra = kwargs
         self.mode_functions = {
             "none": self.none,
-            "quadratic": self.quadratic,
+            "pow": self.pow,
+            "morse": self.morse,
         }
 
         if mode in self.mode_functions:
             self.f = self.mode_functions[mode]
-            if mode == "quadratic":
+            if mode == "pow":
                 symbol = kwargs.get("symbol", None)
-                r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
-                self.r0 = r0
+                self.exp = kwargs.get("exp", 2)
+                self.r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
+            elif mode == "morse":
+                pass
+                # self.r0= kwargs.get('r0', 2 * covalent_radii(symbol))
+                # self.a= kwargs.get('a',
+                # self.W= kwargs.get('W',
+                # self.f=self.woods_saxon
+                # (1 - e^(-a * (r - r_0)))^2
+                # self.r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
         else:
             raise NotImplementedError("Implement new confinements")
 
@@ -419,9 +469,13 @@ class ConfinementPotential:
         """Confinement potential function for the 'none' mode."""
         return 0.0
 
-    def quadratic(self, r):
+    def pow(self, r):
         """Confinement potential function for the 'frauenheim' mode."""
-        return (r / self.r0) ** 2
+        return (r / self.r0) ** self.exp
+
+    def morse(self, r):
+        """Confinement potential function for the 'frauenheim' mode."""
+        return self.D * (1 - np.exp(-self.a * (r - self.r0))) ** 2
 
     def __call__(self, r):
         """Calculate the confinement potential for a given radius."""
