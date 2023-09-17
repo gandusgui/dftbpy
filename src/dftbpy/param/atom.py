@@ -10,6 +10,7 @@ from ase.units import Bohr
 from dftbpy.param.configs import (
     configurations,
     convert_configuration,
+    dissociation_energies,
     valence_configurations,
 )
 from dftbpy.param.hartree import hartree
@@ -306,7 +307,7 @@ class Atom:
             vHr -= self.Z
             # exchange-correlation potential
             self.xc.compute(n)
-            vr[:] = vHr + self.xc.vxc * r
+            vr[:] = vHr + self.xc.vrxc  # * r
             # confinement
             vr[:] += self.vconf(r) * r
             # mix
@@ -432,6 +433,29 @@ class Atom:
             pprint.PrettyPrinter(compact=True, stream=fp).pprint(self.todict())
 
 
+def get_confinement(mode, *p):
+    def none(r):
+        """Confinement potential function for the 'none' mode."""
+        return 0.0
+
+    def pow(r):
+        """Confinement potential function for the 'frauenheim' mode."""
+        return (r / p[0]) ** p[1]
+
+    def morse(r):
+        """Confinement potential function for the 'frauenheim' mode."""
+        return p[0] * (1 + np.exp(-2 * p[1] * r) - 2 * np.exp(-p[1] * r))
+        # return p[0] * (1 - np.exp(p[1] * r)) ** 2
+
+    mode_functions = {
+        "none": none,
+        "pow": pow,
+        "morse": morse,
+    }
+
+    return mode_functions[mode]
+
+
 class ConfinementPotential:
     def __init__(self, *, mode, **kwargs):
         """
@@ -440,42 +464,17 @@ class ConfinementPotential:
         :param mode: The mode of the confinement potential.
         :param kwargs: Additional mode-specific arguments.
         """
-        self.mode = mode
-        self.extra = kwargs
-        self.mode_functions = {
-            "none": self.none,
-            "pow": self.pow,
-            "morse": self.morse,
-        }
-
-        if mode in self.mode_functions:
-            self.f = self.mode_functions[mode]
-            if mode == "pow":
-                symbol = kwargs.get("symbol", None)
-                self.exp = kwargs.get("exp", 2)
-                self.r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
-            elif mode == "morse":
-                pass
-                # self.r0= kwargs.get('r0', 2 * covalent_radii(symbol))
-                # self.a= kwargs.get('a',
-                # self.W= kwargs.get('W',
-                # self.f=self.woods_saxon
-                # (1 - e^(-a * (r - r_0)))^2
-                # self.r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
-        else:
-            raise NotImplementedError("Implement new confinements")
-
-    def none(self, r):
-        """Confinement potential function for the 'none' mode."""
-        return 0.0
-
-    def pow(self, r):
-        """Confinement potential function for the 'frauenheim' mode."""
-        return (r / self.r0) ** self.exp
-
-    def morse(self, r):
-        """Confinement potential function for the 'frauenheim' mode."""
-        return self.D * (1 - np.exp(-self.a * (r - self.r0))) ** 2
+        symbol = kwargs.get("symbol", None)
+        r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
+        p = []
+        if mode == "pow":
+            a = kwargs.get("a", 2)
+            p = [r0, a]
+        elif mode == "morse":
+            D = kwargs.get("D", dissociation_energies[symbol])
+            a = np.sqrt(1 / D) / r0
+            p = [D, a]
+        self.f = get_confinement(mode, *p)
 
     def __call__(self, r):
         """Calculate the confinement potential for a given radius."""

@@ -1,8 +1,11 @@
+import pprint
 from itertools import permutations
 from math import acos, cos, sin, sqrt, tan
+from pathlib import Path
 
 import numpy as np
-from ase import Atom
+
+from dftbpy.param.atom import Atom
 
 slako_integrals = ["dds", "ddp", "ddd", "pds", "pdp", "pps", "ppp", "sds", "sps", "sss"]
 
@@ -152,12 +155,28 @@ class SlaterKosterTable:
             }
         self.funcs = funcs
 
-    def run(self, N=50, nt=150, nr=50):
-        rcut = max(atom.get_cutoff() for atom in self.atoms.values())
+    def initialize(self):
+        for atom in self.atoms.values():
+            if atom.nupdates == 0:
+                atom.run()
+
+    def run(self, R1=None, R2=None, N=50, nt=150, nr=50):
+        self.initialize()
+        coffs = [atom.get_cutoff() for atom in self.atoms.values()]
         rmin = 1e-7
-        # Atomic distances
-        R1 = 0.05
-        R2 = sum(atom.get_cutoff() for atom in self.atoms.values())
+        R1 = R1 or 0.05
+        # min(
+        #     atom.rgd.r_g[find_first_peakpos(R)]
+        #     for atom in self.atoms.values()
+        #     for R in atom.R_j
+        # )
+        R2 = R2 or sum(coffs)
+        rcut = R2 * 1.2
+        # rcut = max(atom.get_cutoff() for atom in self.atoms.values())
+        # rmin = 1e-7
+        # # Atomic distances
+        # R1 = 0.05
+        # R2 = sum(atom.get_cutoff() for atom in self.atoms.values())
         self.R = np.linspace(R1, R2, N, endpoint=True)
         # Slater-Koster tables
         self.tables = {(s1, s2): np.zeros((N, 20)) for s1, s2 in self.pairs}
@@ -206,3 +225,34 @@ class SlaterKosterTable:
 
     def __getitem__(self, key):
         return self.tables[key]
+
+    def todict(self):
+        d = {}
+        d["R"] = self.R
+        d["atoms"] = atoms = {}
+        for symbol, atom in self.atoms.items():
+            atoms[symbol] = a = atom.todict()
+            a["valence_configuration"] = atom.valence_configuration
+            a.pop("symbol")
+            a.pop("configuration")
+        d["tables"] = self.tables
+        return d
+
+    def __repr__(self) -> str:
+        return pprint.PrettyPrinter(compact=True).pformat(self.todict())
+
+    def write(self, dir="."):
+        path = Path(dir)
+        name = next("-".join(pair) for pair in self.pairs)
+        if path.suffix:
+            # make sure .elm
+            name = path.name
+            path = path.parent
+        file = (path / name).with_suffix(".slako")
+        with open(file, "w") as fp:
+            pprint.PrettyPrinter(compact=True, stream=fp).pprint(self.todict())
+
+
+def find_first_peakpos(f):
+    df = f[1:] - f[:-1]  # derivative
+    return np.argwhere((df[1:] * df[:-1]) < 0)[0][0]  # 1st change of sign (peak)

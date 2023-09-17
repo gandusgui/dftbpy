@@ -29,6 +29,10 @@ class LDA:
     def vxc(self):
         return self.out["vxc"]
 
+    @property
+    def vrxc(self):
+        return self.vxc * self.rgd.r_g
+
     def compute(self, n):
         inp = {"rho": n}
         res = [f.compute(inp) for f in self.xcf]
@@ -61,6 +65,10 @@ class PBE:
     def vxc(self):
         return self.out["vxc"]
 
+    @property
+    def vrxc(self):
+        return self.vxc * self.rgd.r_g
+
     def compute(self, n):
         dndr = self.rgd.derivative(n)
         inp = {"rho": n, "sigma": dndr * dndr}
@@ -69,6 +77,15 @@ class PBE:
             "exc": sum(out["zk"].reshape(-1) for out in res),
             "vxc": sum(out["vrho"].reshape(-1) for out in res),
         }
+        vsigma = sum(out["vsigma"].reshape(-1) for out in res)
+        self.out["vrxc"] = self.out["vxc"] * self.rgd.r_g - self.correction(
+            vsigma, dndr
+        )
+
+    def correction(self, vsigma, dndr):
+        dedg = 2.0 * vsigma * dndr
+        d2edrdg = self.rgd.derivative(dedg)
+        return 2.0 * dedg + d2edrdg * self.rgd.r_g
 
 
 class PW92:
@@ -161,6 +178,10 @@ class PW92:
     @property
     def vxc(self):
         return self.out["vxc"]
+
+    @property
+    def vrxc(self):
+        return self.vxc * self.rgd.r_g
 
     def compute(self, n):
         self.out["exc"] = exc = self.calculate_exc(n)

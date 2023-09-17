@@ -1,4 +1,5 @@
-from typing import Dict
+import pprint
+from pathlib import Path
 
 import numpy as np
 
@@ -8,18 +9,11 @@ from dftbpy.param.slako import make_grid
 
 
 class Hubbard:
-    def __init__(
-        self,
-        atom: Atom,
-        limit2: Dict[str, bool] = {"valence": True, "diagonal": True, "triu": False},
-    ):
+    def __init__(self, atom: Atom, **kwargs):
+        if isinstance(atom, str):
+            atom = Atom(atom, **kwargs)
         self.atom = atom
-        self.limit2 = limit2
-        self.nlf_j = (
-            tuple(atom.valence_configuration.keys())
-            if limit2["valence"]
-            else tuple(atom.configuration.keys())
-        )
+        self.nlf_j = tuple(atom.valence_configuration.keys())
         self.nj = len(self.nlf_j)
         self.arrays = {
             "dn": np.zeros((self.nj, atom.N)),  # Density change
@@ -36,13 +30,6 @@ class Hubbard:
             if i == j:
                 self.dn[self.nlf_j[i]] = self.arrays["dn"][i]
                 self.dv[self.nlf_j[i]] = self.arrays["dv"][i]
-
-        if limit2["diagonal"]:
-            self.indices = np.diag_indices(self.nj)
-        elif limit2["triu"]:
-            self.indices = np.triu_indices(self.nj)
-        else:  # full
-            self.indices = tuple(np.mgrid[: self.nj, : self.nj].reshape(2, -1))
 
         self.nupdates = 0
 
@@ -82,6 +69,7 @@ class Hubbard:
         # dn1df2 = (atom.R_j[j1] ** 2 / (4 * np.pi) - self.n_j[j1]) / (fp2 - f2)
         # reset
         atom.f_j[j2] = f2
+        atom.e_j[:] = self.e_j
         return de1df2, dn1df2
 
     def run(self, df=0.01):
@@ -90,7 +78,7 @@ class Hubbard:
         dr = self.atom.rgd.dr_g
         r1 = r[1]
         r2 = r[2]
-        for i, j in zip(*self.indices):
+        for i, j in zip(*np.triu_indices(self.nj)):
             nlf1, nlf2 = self.labels[i, j]
             dedf, dndf = self.compute(nlf1, nlf2, df=df)
             de2df, dn2df = self.compute(nlf1, nlf2, df=2 * df)
@@ -103,17 +91,36 @@ class Hubbard:
                 dv[1:] /= r[1:]
                 # mid-point formula
                 dv[0] = 0.5 * (dv[1] + dv[2] + (dv[1] - dv[2]) * (r1 + r2) / (r2 - r1))
-            if self.limit2["triu"]:
-                self.U[j, i] = self.U[i, j]
+            self.U[j, i] = self.U[i, j]
 
         self.nupdates += 1
 
     def get_cutoff(self):
-        gcut = max(self.atom.rgd.get_cutoff(dn) for dn in self.dn.values())
-        return self.atom.rgd.r_g[gcut]
+        gcut = max(self.atom.rgd.get_cutoff(dv) for dv in self.dv.values())
+        return self.atom.rgd.r_g[gcut - 1]
 
     def spline(self, x):
         return self.atom.spline(x)
+
+    def todict(self):
+        d = {}
+        d.update(self.atom.todict())
+        d["U"] = self.U
+        return d
+
+    def __repr__(self) -> str:
+        return pprint.PrettyPrinter(compact=True).pformat(self.todict())
+
+    def write(self, dir="."):
+        path = Path(dir)
+        name = self.symbol
+        if path.suffix:
+            # make sure .elm
+            name = path.name
+            path = path.parent
+        file = (path / name).with_suffix(".elm")
+        with open(file, "w") as fp:
+            pprint.PrettyPrinter(compact=True, stream=fp).pprint(self.todict())
 
 
 class CoulombTable:
@@ -144,19 +151,23 @@ class CoulombTable:
     def shape(self):
         return self.labels.shape
 
+    def initialize(self):
+        for hub in self.hubs.values():
+            if hub.nupdates == 0:
+                hub.run()
+
     def run(self, R1=None, R2=None, N=50, nt=150, nr=50):
+        self.initialize()
         coffs = [hub.get_cutoff() for hub in self.hubs.values()]
-        rcut = R2 * 1.2  # or max(coffs) * 1.2
         rmin = 1e-7
-        # Atomic distances
-        # R1 = 0.05
-        R1 = R1 or min(
-            hub.atom.rgd.r_g[find_first_peakpos(dn)]
-            for hub in self.hubs.values()
-            for dn in hub.dn.values()
-        )
-        # R1 = 2 * rmin
+        R1 = R1 or 0.05
+        # min(
+        #     hub.atom.rgd.r_g[find_first_peakpos(dn)]
+        #     for hub in self.hubs.values()
+        #     for dn in hub.dn.values()
+        # )
         R2 = R2 or sum(coffs)
+        rcut = R2 * 1.2
         self.R = np.linspace(R1, R2, N, endpoint=True)
         # Coulomb tables
         self.tables = np.zeros((N,) + self.shape, dtype=float)
@@ -180,8 +191,30 @@ class CoulombTable:
 
                 table[i, j] = np.dot(dn1 * dv2, ddA)
 
-    def __getitem__(self, *index):
-        return self.table[*index]
+    def __getitem__(self, index):
+        return self.table[index]
+
+    def todict(self):
+        d = {}
+        d["R"] = self.R
+        for symbol in self.pair:
+            d[symbol] = self.hubs[symbol]
+        d["tables"] = self.tables
+        return d
+
+    def __repr__(self) -> str:
+        return pprint.PrettyPrinter(compact=True).pformat(self.todict())
+
+    def write(self, dir="."):
+        path = Path(dir)
+        name = next("-".join(pair) for pair in self.pairs)
+        if path.suffix:
+            # make sure .elm
+            name = path.name
+            path = path.parent
+        file = (path / name).with_suffix(".slako")
+        with open(file, "w") as fp:
+            pprint.PrettyPrinter(compact=True, stream=fp).pprint(self.todict())
 
 
 def find_first_peakpos(f):
