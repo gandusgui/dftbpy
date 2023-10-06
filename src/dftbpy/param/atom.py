@@ -464,6 +464,7 @@ class ConfinementPotential:
         :param mode: The mode of the confinement potential.
         :param kwargs: Additional mode-specific arguments.
         """
+        self.mode = mode
         symbol = kwargs.get("symbol", None)
         r0 = kwargs.get("r0", 2 * covalent_radii(symbol))
         p = []
